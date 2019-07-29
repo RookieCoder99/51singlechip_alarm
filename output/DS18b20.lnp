@@ -1,0 +1,12 @@
+".\output\delay.obj",
+".\output\main.obj",
+".\output\ds1302.obj",
+".\output\IIC.obj",
+".\output\ds18b20.obj",
+".\output\hb.obj",
+".\output\yuyin.obj",
+".\output\alarm.obj",
+".\output\switch_screen.obj",
+".\output\main2233.obj" 
+TO ".\output\DS18b20" 
+PRINT(".\output\DS18b20.m51") RAMSIZE(256) 

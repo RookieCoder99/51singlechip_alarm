@@ -1,0 +1,499 @@
+C51 COMPILER V9.54   ALARM                                                                 05/27/2019 15:40:45 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE ALARM
+OBJECT MODULE PLACED IN .\output\alarm.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE alarm.c LARGE OPTIMIZE(8,SIZE) BROWSE DEBUG OBJECTEXTEND PRINT(.\output\
+                    -alarm.lst) TABS(2) OBJECT(.\output\alarm.obj)
+
+line level    source
+
+   1          #include <stdio.h>
+   2          #include "main.h"
+   3          #include "delay.h"
+   4          #include "ds1302.h"
+   5          #include "ds18B20.h"
+   6          #include "hb.h"
+   7          #include "yuyin.h"
+   8          #include "iic.h"
+   9          extern uchar alarm_set; //第几个闹钟
+  10          extern uchar alarm_pos;
+  11          extern SYSTEM_TIME str_time;
+  12          extern SYSTEM_TIME str_time_alarm_flag[2];
+  13          extern SYSTEM_TIME str_time_alarm[2];
+  14          extern uchar  alarm_show_flag[2][7];
+  15          
+  16          /**************闹钟功能实现主体********************/
+  17          
+  18          void alarm_write_iic(SYSTEM_TIME str_time_alarm_[2],uchar alarm_show_flag_[2][7])
+  19          {
+  20   1          write_IIC(ALARM_ADDR, str_time_alarm_[0].hour);
+  21   1          delay_ms(2);
+  22   1          write_IIC(ALARM_ADDR+1, str_time_alarm_[0].min);
+  23   1          delay_ms(2);
+  24   1          write_IIC(ALARM_ADDR+2, str_time_alarm_[0].sec);
+  25   1          delay_ms(2);
+  26   1          write_IIC(ALARM_ADDR+3, alarm_show_flag_[0][0]);
+  27   1          delay_ms(2);
+  28   1          write_IIC(ALARM_ADDR+4, alarm_show_flag_[0][1]);
+  29   1          delay_ms(2);
+  30   1          write_IIC(ALARM_ADDR+5, alarm_show_flag_[0][2]);
+  31   1          delay_ms(2);
+  32   1          write_IIC(ALARM_ADDR+6, alarm_show_flag_[0][3]);
+  33   1          delay_ms(2);
+  34   1          write_IIC(ALARM_ADDR+7, alarm_show_flag_[0][4]);
+  35   1          delay_ms(2);
+  36   1          write_IIC(ALARM_ADDR+8, alarm_show_flag_[0][5]);
+  37   1          delay_ms(2);
+  38   1          write_IIC(ALARM_ADDR+9, alarm_show_flag_[0][6]);
+  39   1          delay_ms(2);
+  40   1        
+  41   1          write_IIC(ALARM_ADDR2, str_time_alarm_[1].hour);
+  42   1          delay_ms(2);
+  43   1          write_IIC(ALARM_ADDR2+1, str_time_alarm_[1].min);
+  44   1          delay_ms(2);
+  45   1          write_IIC(ALARM_ADDR2+2, str_time_alarm_[1].sec);
+  46   1          delay_ms(2);
+  47   1          write_IIC(ALARM_ADDR2+3, alarm_show_flag_[1][0]);
+  48   1          delay_ms(2);
+  49   1          write_IIC(ALARM_ADDR2+4, alarm_show_flag_[1][1]);
+  50   1          delay_ms(2);
+  51   1          write_IIC(ALARM_ADDR2+5, alarm_show_flag_[1][2]);
+  52   1          delay_ms(2);
+  53   1          write_IIC(ALARM_ADDR2+6, alarm_show_flag_[1][3]);
+  54   1          delay_ms(2);
+C51 COMPILER V9.54   ALARM                                                                 05/27/2019 15:40:45 PAGE 2   
+
+  55   1          write_IIC(ALARM_ADDR2+7, alarm_show_flag_[1][4]);
+  56   1          delay_ms(2);
+  57   1          write_IIC(ALARM_ADDR2+8, alarm_show_flag_[1][5]);
+  58   1          delay_ms(2);
+  59   1          write_IIC(ALARM_ADDR2+9, alarm_show_flag_[1][6]);
+  60   1          delay_ms(2);
+  61   1          
+  62   1      }
+  63          void alarm_read_iic()
+  64          {
+  65   1          str_time_alarm[0].hour = read_IIC(ALARM_ADDR);
+  66   1          delay_ms(2);
+  67   1          str_time_alarm[0].min = read_IIC(ALARM_ADDR+1);
+  68   1          delay_ms(2);
+  69   1          alarm_show_flag[0][0]=read_IIC(ALARM_ADDR+3);
+  70   1          delay_ms(2);
+  71   1          alarm_show_flag[0][1]=read_IIC(ALARM_ADDR+4);
+  72   1          delay_ms(2);
+  73   1          alarm_show_flag[0][2]=read_IIC(ALARM_ADDR+5);
+  74   1          delay_ms(2);
+  75   1          alarm_show_flag[0][3]=read_IIC(ALARM_ADDR+6);
+  76   1          delay_ms(2);
+  77   1          alarm_show_flag[0][4]=read_IIC(ALARM_ADDR+7);
+  78   1          delay_ms(2);
+  79   1          alarm_show_flag[0][5]=read_IIC(ALARM_ADDR+8);
+  80   1          delay_ms(2);
+  81   1          alarm_show_flag[0][6]=read_IIC(ALARM_ADDR+9);
+  82   1          delay_ms(2);
+  83   1        
+  84   1          str_time_alarm[1].hour = read_IIC(ALARM_ADDR2);
+  85   1          delay_ms(2);
+  86   1          str_time_alarm[1].min = read_IIC(ALARM_ADDR2+1);
+  87   1          delay_ms(2);
+  88   1          alarm_show_flag[1][0]=read_IIC(ALARM_ADDR2+3);
+  89   1          delay_ms(2);
+  90   1          alarm_show_flag[1][1]=read_IIC(ALARM_ADDR2+4);
+  91   1          delay_ms(2);
+  92   1          alarm_show_flag[1][2]=read_IIC(ALARM_ADDR2+5);
+  93   1          delay_ms(2);
+  94   1          alarm_show_flag[1][3]=read_IIC(ALARM_ADDR2+6);
+  95   1          delay_ms(2);
+  96   1          alarm_show_flag[1][4]=read_IIC(ALARM_ADDR2+7);
+  97   1          delay_ms(2);
+  98   1          alarm_show_flag[1][5]=read_IIC(ALARM_ADDR2+8);
+  99   1          delay_ms(2);
+ 100   1          alarm_show_flag[1][6]=read_IIC(ALARM_ADDR2+9);
+ 101   1          delay_ms(2);
+ 102   1      }
+ 103          
+ 104          void alarm_function()
+ 105          { 
+ 106   1        while(!ALARM)
+ 107   1        {
+ 108   2          delay_ms(100);
+ 109   2          if(ALARM!=0) //加这个因为那个按钮总是会误触导致抖动
+ 110   2          {
+ 111   3            break;
+ 112   3          }
+ 113   2          while(1)
+ 114   2          {
+ 115   3            if(ALARM==0)
+ 116   3            {
+C51 COMPILER V9.54   ALARM                                                                 05/27/2019 15:40:45 PAGE 3   
+
+ 117   4              delay_ms(10);
+ 118   4              if(ALARM==0)
+ 119   4              {
+ 120   5                alarm_set+=1;
+ 121   5                if(alarm_set==3)
+ 122   5                {
+ 123   6                  alarm_set=0;
+ 124   6                  stop_blink_week(alarm_pos-1);
+ 125   6                  alarm_pos=0;
+ 126   6                  stop_blink_alarm();
+ 127   6                  clean_all();
+ 128   6                  break;
+ 129   6                }
+ 130   5                switch(alarm_set)
+ 131   5                {
+ 132   6                  case 1:
+ 133   6                    clean_all();
+ 134   6                    show_alarm_all(alarm_set-1);
+ 135   6                    show_time_only(str_time_alarm[0]);
+ 136   6                    show_alarm();
+ 137   6                    start_blink_alarm();
+ 138   6                    break;
+ 139   6                  case 2:
+ 140   6                    stop_blink_week(alarm_pos-1);
+ 141   6                    clean_all();
+ 142   6                    show_alarm_all(alarm_set-1);
+ 143   6                    alarm_pos=0;//从SUN开始选择
+ 144   6                    show_time_only(str_time_alarm[1]);
+ 145   6                    show_alarm();
+ 146   6                    start_blink_alarm();
+ 147   6                    break;
+ 148   6                }   
+ 149   5              }
+ 150   4            }
+ 151   3            //设置闹钟时间等
+ 152   3            if(SWITCH==0)
+ 153   3            {
+ 154   4              delay_ms(90);
+ 155   4              if(SWITCH==0)
+ 156   4              {
+ 157   5                alarm_pos+=1;
+ 158   5                show_alarm();
+ 159   5                if(alarm_pos==10)
+ 160   5                {
+ 161   6                  alarm_pos=0;
+ 162   6                  stop_blink_min();
+ 163   6                  start_blink_alarm();
+ 164   6                }
+ 165   5                switch(alarm_pos)
+ 166   5                {
+ 167   6                  case 1:
+ 168   6                    show_alarm_all(alarm_set-1);
+ 169   6                    if(alarm_show_flag[alarm_set-1][0]==0x00)
+ 170   6                    {
+ 171   7                      show_alarm_day(0);
+ 172   7                    }
+ 173   6                    start_blink_week(0);
+ 174   6                    break;
+ 175   6                  case 2:
+ 176   6                    stop_blink_week(0);
+ 177   6                    show_alarm_all(alarm_set-1);
+ 178   6                    if(alarm_show_flag[alarm_set-1][1]==0x00)
+C51 COMPILER V9.54   ALARM                                                                 05/27/2019 15:40:45 PAGE 4   
+
+ 179   6                    {
+ 180   7                      show_alarm_day(1);
+ 181   7                    }
+ 182   6                    start_blink_week(1);
+ 183   6                    break;
+ 184   6                  case 3:
+ 185   6                    stop_blink_week(1);
+ 186   6                    show_alarm_all(alarm_set-1);
+ 187   6                    if(alarm_show_flag[alarm_set-1][2]==0x00)
+ 188   6                    {
+ 189   7                      show_alarm_day(2);
+ 190   7                    }
+ 191   6                    start_blink_week(2);
+ 192   6                    break;
+ 193   6                  case 4:
+ 194   6                    stop_blink_week(2);
+ 195   6                    show_alarm_all(alarm_set-1);
+ 196   6                    if(alarm_show_flag[alarm_set-1][3]==0x00)
+ 197   6                    {
+ 198   7                      show_alarm_day(3);
+ 199   7                    }
+ 200   6                    start_blink_week(3);
+ 201   6                    break;
+ 202   6                  case 5:
+ 203   6                    stop_blink_week(3);
+ 204   6                    show_alarm_all(alarm_set-1);
+ 205   6                    if(alarm_show_flag[alarm_set-1][4]==0x00)
+ 206   6                    {
+ 207   7                      show_alarm_day(4);
+ 208   7                    }
+ 209   6                    start_blink_week(4);
+ 210   6                    break;
+ 211   6                  case 6:
+ 212   6                    stop_blink_week(4);
+ 213   6                    show_alarm_all(alarm_set-1);
+ 214   6                    if(alarm_show_flag[alarm_set-1][5]==0x00)
+ 215   6                    {
+ 216   7                      show_alarm_day(5);
+ 217   7                    }
+ 218   6                    start_blink_week(5);
+ 219   6                    break;
+ 220   6                  case 7:
+ 221   6                    stop_blink_week(5);
+ 222   6                      show_alarm_all(alarm_set-1);
+ 223   6                    if(alarm_show_flag[alarm_set-1][6]==0x00)
+ 224   6                    {
+ 225   7                      show_alarm_day(6);
+ 226   7                    }
+ 227   6                    start_blink_week(6);
+ 228   6                    break;
+ 229   6                  case 8:
+ 230   6                    stop_blink_week(6);
+ 231   6                    show_alarm_all(alarm_set-1);
+ 232   6                    start_blink_hour();
+ 233   6                    break;
+ 234   6                  case 9:
+ 235   6                    stop_blink_hour();
+ 236   6                    start_blink_min();
+ 237   6                    break;
+ 238   6                }
+ 239   5              }
+ 240   4            }
+C51 COMPILER V9.54   ALARM                                                                 05/27/2019 15:40:45 PAGE 5   
+
+ 241   3            //加和减调节时间和星期几
+ 242   3            if(ADD==0)
+ 243   3            {
+ 244   4              delay_ms(100);
+ 245   4              if(ADD==0)
+ 246   4              {
+ 247   5                switch(alarm_pos)
+ 248   5                {
+ 249   6                  case 1:
+ 250   6                    stop_blink_week(0);
+ 251   6                    alarm_show_flag[alarm_set-1][0]=alarm_show_flag[alarm_set-1][0]^0xff;
+ 252   6                    if(alarm_show_flag[alarm_set-1][0]==0xff)
+ 253   6                    {
+ 254   7                      show_alarm_day(0);
+ 255   7                    }
+ 256   6                    else
+ 257   6                    {
+ 258   7                      clean_alarm_day(0);
+ 259   7                    }
+ 260   6                    break;
+ 261   6                  case 2:
+ 262   6                    stop_blink_week(1);
+ 263   6                    alarm_show_flag[alarm_set-1][1]=alarm_show_flag[alarm_set-1][1]^0xff;
+ 264   6                    if(alarm_show_flag[alarm_set-1][1]==0xff)
+ 265   6                    {
+ 266   7                      show_alarm_day(1);
+ 267   7                    }
+ 268   6                    else
+ 269   6                    {
+ 270   7                      clean_alarm_day(1);
+ 271   7                    }
+ 272   6                    break;
+ 273   6                  case 3:
+ 274   6                    stop_blink_week(2);
+ 275   6                    alarm_show_flag[alarm_set-1][2]=alarm_show_flag[alarm_set-1][2]^0xff;
+ 276   6                    if(alarm_show_flag[alarm_set-1][2]==0xff)
+ 277   6                    {
+ 278   7                      show_alarm_day(2);
+ 279   7                    }
+ 280   6                    else
+ 281   6                    {
+ 282   7                      clean_alarm_day(2);
+ 283   7                    }
+ 284   6                    break;
+ 285   6                  case 4:
+ 286   6                    stop_blink_week(3);
+ 287   6                  alarm_show_flag[alarm_set-1][3]=alarm_show_flag[alarm_set-1][3]^0xff;
+ 288   6                    if(alarm_show_flag[alarm_set-1][3]==0xff)
+ 289   6                    {
+ 290   7                      show_alarm_day(3);
+ 291   7                    }
+ 292   6                    else
+ 293   6                    {
+ 294   7                      clean_alarm_day(3);
+ 295   7                    }
+ 296   6                    break;
+ 297   6                  case 5:
+ 298   6                    stop_blink_week(4);
+ 299   6                  alarm_show_flag[alarm_set-1][4]=alarm_show_flag[alarm_set-1][4]^0xff;
+ 300   6                    if(alarm_show_flag[alarm_set-1][4]==0xff)
+ 301   6                    {
+ 302   7                      show_alarm_day(4);
+C51 COMPILER V9.54   ALARM                                                                 05/27/2019 15:40:45 PAGE 6   
+
+ 303   7                    }
+ 304   6                    else
+ 305   6                    {
+ 306   7                      clean_alarm_day(4);
+ 307   7                    }
+ 308   6                    break;
+ 309   6                  case 6:
+ 310   6                    stop_blink_week(5);
+ 311   6                    alarm_show_flag[alarm_set-1][5]=alarm_show_flag[alarm_set-1][5]^0xff;
+ 312   6                    if(alarm_show_flag[alarm_set-1][5]==0xff)
+ 313   6                    {
+ 314   7                      show_alarm_day(5);
+ 315   7                    }
+ 316   6                    else
+ 317   6                    {
+ 318   7                      clean_alarm_day(5);
+ 319   7                    }
+ 320   6                    break;
+ 321   6                  case 7:
+ 322   6                    stop_blink_week(6);
+ 323   6                    alarm_show_flag[alarm_set-1][6]=alarm_show_flag[alarm_set-1][6]^0xff;
+ 324   6                    if(alarm_show_flag[alarm_set-1][6]==0xff)
+ 325   6                    {
+ 326   7                      show_alarm_day(6);
+ 327   7                    }
+ 328   6                    else
+ 329   6                    {
+ 330   7                      clean_alarm_day(6);
+ 331   7                    }
+ 332   6                    break;
+ 333   6                  case 8:
+ 334   6                    stop_blink_hour();
+ 335   6                    str_time_alarm[alarm_set-1]=add_sub_hour_alarm(str_time_alarm[alarm_set-1],1);
+ 336   6                    hb_show_hour(str_time_alarm[alarm_set-1]);
+ 337   6                    start_blink_hour();
+ 338   6                    break;
+ 339   6                  case 9:
+ 340   6                    stop_blink_min();
+ 341   6                    str_time_alarm[alarm_set-1]=add_sub_min_alarm(str_time_alarm[alarm_set-1],1);
+ 342   6                    hb_show_min(str_time_alarm[alarm_set-1]);
+ 343   6                    start_blink_min();
+ 344   6                    break;
+ 345   6                }
+ 346   5                alarm_write_iic(str_time_alarm,alarm_show_flag);
+ 347   5                str_time_alarm_flag[alarm_set-1]=str_time_alarm[alarm_set-1];
+ 348   5              }
+ 349   4            }
+ 350   3            if(SUB==0)
+ 351   3            {
+ 352   4              delay_ms(80);
+ 353   4              if(SUB==0)
+ 354   4              {
+ 355   5                switch(alarm_pos)
+ 356   5                {
+ 357   6                  case 1:
+ 358   6                    stop_blink_week(0);
+ 359   6                    alarm_show_flag[alarm_set-1][0]=alarm_show_flag[alarm_set-1][0]^0xff;
+ 360   6                    if(alarm_show_flag[alarm_set-1][0]==0xff)
+ 361   6                    {
+ 362   7                      show_alarm_day(0);
+ 363   7                    }
+ 364   6                    else
+C51 COMPILER V9.54   ALARM                                                                 05/27/2019 15:40:45 PAGE 7   
+
+ 365   6                    {
+ 366   7                      clean_alarm_day(0);
+ 367   7                    }
+ 368   6                    break;
+ 369   6                  case 2:
+ 370   6                    stop_blink_week(1);
+ 371   6                    alarm_show_flag[alarm_set-1][1]=alarm_show_flag[alarm_set-1][1]^0xff;
+ 372   6                    if(alarm_show_flag[alarm_set-1][1]==0xff)
+ 373   6                    {
+ 374   7                      show_alarm_day(1);
+ 375   7                    }
+ 376   6                    else
+ 377   6                    {
+ 378   7                      clean_alarm_day(1);
+ 379   7                    }
+ 380   6                    break;
+ 381   6                  case 3:
+ 382   6                    stop_blink_week(2);
+ 383   6                    alarm_show_flag[alarm_set-1][2]=alarm_show_flag[alarm_set-1][2]^0xff;
+ 384   6                    if(alarm_show_flag[alarm_set-1][2]==0xff)
+ 385   6                    {
+ 386   7                      show_alarm_day(2);
+ 387   7                    }
+ 388   6                    else
+ 389   6                    {
+ 390   7                      clean_alarm_day(2);
+ 391   7                    }
+ 392   6                    break;
+ 393   6                  case 4:
+ 394   6                    stop_blink_week(3);
+ 395   6                  alarm_show_flag[alarm_set-1][3]=alarm_show_flag[alarm_set-1][3]^0xff;
+ 396   6                    if(alarm_show_flag[alarm_set-1][3]==0xff)
+ 397   6                    {
+ 398   7                      show_alarm_day(3);
+ 399   7                    }
+ 400   6                    else
+ 401   6                    {
+ 402   7                      clean_alarm_day(3);
+ 403   7                    }
+ 404   6                    break;
+ 405   6                  case 5:
+ 406   6                    stop_blink_week(4);
+ 407   6                  alarm_show_flag[alarm_set-1][4]=alarm_show_flag[alarm_set-1][4]^0xff;
+ 408   6                    if(alarm_show_flag[alarm_set-1][4]==0xff)
+ 409   6                    {
+ 410   7                      show_alarm_day(4);
+ 411   7                    }
+ 412   6                    else
+ 413   6                    {
+ 414   7                      clean_alarm_day(4);
+ 415   7                    }
+ 416   6                    break;
+ 417   6                  case 6:
+ 418   6                    stop_blink_week(5);
+ 419   6                    alarm_show_flag[alarm_set-1][5]=alarm_show_flag[alarm_set-1][5]^0xff;
+ 420   6                    if(alarm_show_flag[alarm_set-1][5]==0xff)
+ 421   6                    {
+ 422   7                      show_alarm_day(5);
+ 423   7                    }
+ 424   6                    else
+ 425   6                    {
+ 426   7                      clean_alarm_day(5);
+C51 COMPILER V9.54   ALARM                                                                 05/27/2019 15:40:45 PAGE 8   
+
+ 427   7                    }
+ 428   6                    break;
+ 429   6                  case 7:
+ 430   6                    stop_blink_week(6);
+ 431   6                    alarm_show_flag[alarm_set-1][6]=alarm_show_flag[alarm_set-1][6]^0xff;
+ 432   6                    if(alarm_show_flag[alarm_set-1][6]==0xff)
+ 433   6                    {
+ 434   7                      show_alarm_day(6);
+ 435   7                    }
+ 436   6                    else
+ 437   6                    {
+ 438   7                      clean_alarm_day(6);
+ 439   7                    }
+ 440   6                    break;
+ 441   6                  case 8:
+ 442   6                    stop_blink_hour();
+ 443   6                    str_time_alarm[alarm_set-1]=add_sub_hour_alarm(str_time_alarm[alarm_set-1],0);
+ 444   6                    hb_show_hour(str_time_alarm[alarm_set-1]);
+ 445   6                    start_blink_hour();
+ 446   6                    break;
+ 447   6                  case 9:
+ 448   6                    stop_blink_min();
+ 449   6                    str_time_alarm[alarm_set-1]=add_sub_min_alarm(str_time_alarm[alarm_set-1],0);
+ 450   6                    hb_show_min(str_time_alarm[alarm_set-1]);
+ 451   6                    start_blink_min();
+ 452   6                    break;
+ 453   6                }
+ 454   5                alarm_write_iic(str_time_alarm,alarm_show_flag);
+ 455   5                str_time_alarm_flag[alarm_set-1]=str_time_alarm[alarm_set-1];
+ 456   5              }
+ 457   4            }
+ 458   3          }
+ 459   2          break;  
+ 460   2        }
+ 461   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2778    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----       6
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

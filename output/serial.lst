@@ -1,0 +1,218 @@
+C51 COMPILER V9.54   SERIAL                                                                03/18/2019 16:40:19 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE SERIAL
+OBJECT MODULE PLACED IN .\output\serial.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE serial.c LARGE OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\outpu
+                    -t\serial.lst) TABS(2) OBJECT(.\output\serial.obj)
+
+line level    source
+
+   1          /*****************************************************************************
+   2          * 文件名：serial.c
+   3          * 说  明：串口通信有关的函数
+   4          *****************************************************************************/
+   5          #include "main.h"
+   6          
+   7          uchar g_pSendBuff[13];    //发送缓存
+   8          uchar g_pRecvBuff[14];    //接收缓存
+   9          
+  10          uchar g_ucRecvNum;      //接收字节数
+  11          
+  12          /******************************************************
+  13          * 函  数：定时器1初始化
+  14          * 参  数：空
+  15          * 返回值：无
+  16          ******************************************************/
+  17          void timer1_int(void)
+  18          { 
+  19   1        TMOD |= 0x20;   //定时器T1，工作方式2
+  20   1        TL1 = 0xFD;     //定时器T1初始值253（0xFD）
+  21   1        TH1 = 0xFD;
+  22   1        TR1 = 1;      //定时器T1启动工作（TCON | 0x40）
+  23   1      } 
+  24          
+  25          /******************************************************
+  26          * 函  数：串口初始化，设定串口工作方式、中断
+  27          * 参  数：空
+  28          * 返回值：无
+  29          ******************************************************/
+  30          void serial_int(void)
+  31          {
+  32   1        PCON = 0x80;    //设定SMOD位为1
+  33   1        SCON = 0x51;    //设定SM0=0,SM1=1,串口工作方式1，REN=1接收数据使能
+  34   1        ES = 1;       //使能串口中断
+  35   1      }
+  36          
+  37          /******************************************************
+  38          * 函  数：串口中断函数
+  39          * 参  数：空
+  40          * 返回值：无
+  41          ******************************************************/
+  42          void serial_inter() interrupt 4
+  43          { 
+  44   1        static uchar sSendNum = 0;
+  45   1        uchar tmp = 0;  
+  46   1        
+  47   1        //串口接收中断
+  48   1        if(RI == 1)
+  49   1        { 
+  50   2          RI = 0;
+  51   2          tmp = SBUF;
+  52   2          if(g_ucRecvNum==0 && tmp == 0xEB)
+  53   2          {
+  54   3            g_pRecvBuff[0] = tmp;
+C51 COMPILER V9.54   SERIAL                                                                03/18/2019 16:40:19 PAGE 2   
+
+  55   3            g_ucRecvNum ++;
+  56   3          }else
+  57   2          {
+  58   3            if(g_ucRecvNum > 0)
+  59   3            {
+  60   4               g_pRecvBuff[g_ucRecvNum] = tmp;
+  61   4               g_ucRecvNum ++;
+  62   4            }
+  63   3          }
+  64   2        }
+  65   1      
+  66   1        //串口发送中断
+  67   1        if(TI == 1)
+  68   1        {
+  69   2          TI = 0;
+  70   2          sSendNum ++;
+  71   2          if(sSendNum < g_pSendBuff[1])
+  72   2          {
+  73   3            SBUF = g_pSendBuff[sSendNum];
+  74   3          }else
+  75   2          {
+  76   3            sSendNum = 0;
+  77   3          }
+  78   2        }
+  79   1      }  
+  80          
+  81          /******************************************************
+  82          * 函  数：通信协议处理函数
+  83          * 参  数：空
+  84          * 返回值：无
+  85          ******************************************************/
+  86          void deal_protocol(void)
+  87          {
+  88   1        uchar chk_sum = 0;
+  89   1        uchar len = 0;
+  90   1        uchar cmd = 0;
+  91   1        uchar i = 0;
+  92   1      
+  93   1        if(g_ucRecvNum >= 6)    //协议长度最短是6字节
+  94   1        { 
+  95   2          len = g_pRecvBuff[1]; //数据长度
+  96   2          if(g_ucRecvNum < len)
+  97   2          {
+  98   3            return;
+  99   3          } 
+ 100   2          g_ucRecvNum = 0;    //已经接收完整一帧数据
+ 101   2      
+ 102   2          
+ 103   2          if(g_pRecvBuff[len-1] != 0x90)  //检验协议尾
+ 104   2          {
+ 105   3            return;
+ 106   3          }
+ 107   2           
+ 108   2          //检验校验和
+ 109   2          for(i=1; i<len-2; i++)
+ 110   2          {
+ 111   3            chk_sum += g_pRecvBuff[i];
+ 112   3          }
+ 113   2          if(chk_sum != g_pRecvBuff[len-2])
+ 114   2          {
+ 115   3            return;
+ 116   3          }
+C51 COMPILER V9.54   SERIAL                                                                03/18/2019 16:40:19 PAGE 3   
+
+ 117   2          
+ 118   2          if(g_pRecvBuff[3] == 0x01)    //控制命令    
+ 119   2          {
+ 120   3            cmd = g_pRecvBuff[2];
+ 121   3            switch(cmd)
+ 122   3            {
+ 123   4            case 2:   //温度上下限
+ 124   4              set_temper_updown(g_pRecvBuff[4], g_pRecvBuff[5]);//
+ 125   4              break;
+ 126   4            case 3:   //时间
+ 127   4              set_system_time((uchar*)(g_pRecvBuff+4));
+ 128   4              break;
+ 129   4            case 4:   //风扇
+ 130   4              open_moto(g_pRecvBuff[4]);
+ 131   4              break;
+ 132   4            case 5:   //加热灯
+ 133   4              open_heat(g_pRecvBuff[4]);
+ 134   4              break;
+ 135   4            default :
+ 136   4              break;
+ 137   4            }
+ 138   3            g_pSendBuff[1] = 0x07;
+ 139   3            g_pSendBuff[2] = cmd;
+ 140   3            g_pSendBuff[3] = 0x01;  //控制
+ 141   3            g_pSendBuff[4] = 0x00;  //成功
+ 142   3          }else  //查询命令字
+ 143   2          {
+ 144   3            cmd = g_pRecvBuff[2];
+ 145   3            switch(cmd)
+ 146   3            {
+ 147   4            case 1:   //温度
+ 148   4              get_temper((uchar*)(g_pSendBuff+5));
+ 149   4              g_pSendBuff[1] = 9;
+ 150   4              break;
+ 151   4            case 2:   //温度上下限
+ 152   4              get_temper_updown((uchar*)(g_pSendBuff+5),(uchar*)(g_pSendBuff+6));//
+ 153   4              g_pSendBuff[1] = 9;
+ 154   4              break;
+ 155   4            case 3:   //时间
+ 156   4              get_system_time((uchar*)(g_pSendBuff+5));
+ 157   4              g_pSendBuff[1] = 14;
+ 158   4              break;
+ 159   4            case 4:   //风扇
+ 160   4              get_moto_stat((uchar*)(g_pSendBuff+5));
+ 161   4              g_pSendBuff[1] = 8;
+ 162   4              break;
+ 163   4            case 5:   //加热灯
+ 164   4              get_heat_stat((uchar*)(g_pSendBuff+5));
+ 165   4              g_pSendBuff[1] = 8;
+ 166   4              break;
+ 167   4            default :
+ 168   4              break;
+ 169   4            }
+ 170   3            g_pSendBuff[2] = cmd;
+ 171   3            g_pSendBuff[3] = 0x00;  //读取
+ 172   3            g_pSendBuff[4] = 0x00;  //成功
+ 173   3          }
+ 174   2      
+ 175   2          //应答数据
+ 176   2          g_pSendBuff[0] = 0xEB;
+ 177   2          //g_pSendBuff[1] = 0x06;
+ 178   2          len = g_pSendBuff[1];
+C51 COMPILER V9.54   SERIAL                                                                03/18/2019 16:40:19 PAGE 4   
+
+ 179   2          chk_sum = 0;
+ 180   2          for(i=1; i<len-2; i++)
+ 181   2          {
+ 182   3            chk_sum += g_pSendBuff[i];
+ 183   3          }
+ 184   2          g_pSendBuff[len-2] = chk_sum;
+ 185   2          g_pSendBuff[len-1] = 0x90;
+ 186   2          SBUF = g_pSendBuff[0];
+ 187   2        }
+ 188   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    602    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =     29       4
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

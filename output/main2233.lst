@@ -1,0 +1,620 @@
+C51 COMPILER V9.54   MAIN2233                                                              05/27/2019 15:40:45 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE MAIN2233
+OBJECT MODULE PLACED IN .\output\main2233.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main2233.c LARGE OPTIMIZE(8,SIZE) BROWSE DEBUG OBJECTEXTEND PRINT(.\outp
+                    -ut\main2233.lst) TABS(2) OBJECT(.\output\main2233.obj)
+
+line level    source
+
+   1          #include <stdio.h>
+   2          #include "string.h"
+   3          #include "main.h"
+   4          #include "delay.h"
+   5          #include "string.h"
+   6          #include "ds1302.h"
+   7          #include "alarm.h"
+   8          #include "hb.h"
+   9          #include "stdlib.h"
+  10          #include "iic.h"
+  11          sbit LED1=P2^5;
+  12          extern bit light;//液晶亮不亮
+  13          extern uchar wifi_light;
+  14          extern uchar sleep_flag;
+  15          extern uchar alarm_show_flag[2][7];
+  16          extern SYSTEM_TIME str_time_alarm_flag[2];
+  17          extern uchar wifi_light_flag;
+  18          extern uchar broadcast_morning_flag_flag;
+  19          extern uchar broadcast_now_time_flag_flag;
+  20          uchar data alarm_wifi_state[2];
+  21          uchar data Rxbuff[40],Rxnum;//串口收到的
+  22          uchar data wifi_data[8];
+  23          uchar  data str2[25];
+  24          uchar *data strx=&str2[0];
+  25          uchar  clinetid;
+  26          uchar  getflag;   //getflag判断有没有发消息过来，1-发了消息
+  27          extern bit start_music;//开机音乐
+  28          extern uchar down_temper,up_temper;
+  29          extern uchar broadcast_morning_flag;//早上是否七点播报
+  30          extern uchar broadcast_now_time_flag;//整点是否播报
+  31          extern SYSTEM_TIME str_time;
+  32          extern SYSTEM_TIME str_time_alarm[2];
+  33          extern uchar music_num;
+  34          extern uchar volume;
+  35          extern SYSTEM_TIME str_time_sleep[2];
+  36          
+  37          void InitUART(void)
+  38          {
+  39   1        SCON=0x50;
+  40   1        TMOD=0x20;
+  41   1        TH1=TL1=0xfd;
+  42   1        TR1=1;
+  43   1        ES=1;
+  44   1      }
+  45          
+  46          void Clear_Buffer(void)
+  47          {
+  48   1        Rxnum=0;
+  49   1      }
+  50          
+  51          void Clear_Rxbuff(void)
+  52          {
+  53   1        while(Rxnum<40)
+  54   1        {
+C51 COMPILER V9.54   MAIN2233                                                              05/27/2019 15:40:45 PAGE 2   
+
+  55   2          Rxbuff[Rxnum]=0;
+  56   2          Rxnum++;
+  57   2        }
+  58   1        Rxnum=0;
+  59   1      }
+  60          
+  61          void delayms(unsigned int x)
+  62          {
+  63   1        unsigned int i;
+  64   1        while(x--)
+  65   1          for(i=125;i>0;i--);
+  66   1      }
+  67          
+  68          void UART_send_byte(char dat)
+  69          {
+  70   1        SBUF = dat;
+  71   1        while (TI == 0);
+  72   1        TI = 0;
+  73   1      }
+  74          
+  75          void Send_Str(unsigned char *buf)
+  76          {
+  77   1        while (*buf != '\0')
+  78   1        {
+  79   2          UART_send_byte(*buf++);
+  80   2        }
+  81   1      }
+  82          void ESP8266_SERVER(void)
+  83          {
+  84   1      
+  85   1        Send_Str("AT\r\n");
+  86   1        delayms(500);
+  87   1        strx=strstr((const char*)Rxbuff,(const char*)"OK");
+  88   1        while(strx==NULL)
+  89   1        {
+  90   2          Send_Str("AT\r\n");
+  91   2          delayms(500);
+  92   2          strx=strstr((const char*)Rxbuff,(const char*)"OK");
+  93   2        }
+  94   1        
+  95   1        Send_Str("AT\r\n");
+  96   1        delayms(500);
+  97   1        Send_Str("AT\r\n");
+  98   1        delayms(500);
+  99   1        Send_Str("ATE0\r\n");
+ 100   1        delayms(500);
+ 101   1        Send_Str("AT+CWSAP=\"ESP8266_xjh\",\"12345678\",5,3\r\n");    //5 3;11 0
+ 102   1        delayms(500);
+ 103   1        Send_Str("AT+CIPMUX=1\r\n");
+ 104   1        delayms(500); 
+ 105   1        
+ 106   1        Clear_Buffer(); //指针返回头
+ 107   1        Send_Str("AT+CIPSERVER=1,8888\r\n");
+ 108   1        delayms(500); 
+ 109   1        strx=strstr((const char*)Rxbuff,(const char*)"OK");
+ 110   1        
+ 111   1        while(strx==NULL)
+ 112   1        {   
+ 113   2          Clear_Buffer();  
+ 114   2          delayms(500);
+ 115   2          strx=strstr((const char*)Rxbuff,(const char*)"OK");
+ 116   2        }
+C51 COMPILER V9.54   MAIN2233                                                              05/27/2019 15:40:45 PAGE 3   
+
+ 117   1        Clear_Buffer(); 
+ 118   1        LED1=0;
+ 119   1      }
+ 120          
+ 121          uchar string_to_uchar(uchar in[5])
+ 122          {
+ 123   1        uchar res=0;
+ 124   1        uchar i=0;
+ 125   1        while(in[i]!='\0')
+ 126   1        {
+ 127   2          res=(10*res+in[i]-0x30);  
+ 128   2          i++;
+ 129   2        }
+ 130   1        return res;
+ 131   1      }
+ 132          
+ 133          void Get_Clinet(void)
+ 134          {
+ 135   1        uchar i=0,t=0;
+ 136   1        uchar data wifi_data_temp[8];
+ 137   1        uchar data sleep_data[10];
+ 138   1        getflag=0;
+ 139   1          Clear_Buffer();
+ 140   1          strx=strstr((const char*)Rxbuff,(const char*)"+IPD");
+ 141   1          if(*strx=='+')
+ 142   1          {
+ 143   2            getflag=1;
+ 144   2            //LED1=1;
+ 145   2          }
+ 146   1        
+ 147   1        if(getflag)
+ 148   1        {
+ 149   2      
+ 150   2          delayms(500);
+ 151   2          clinetid=strx[5];
+ 152   2          strx=strstr((const char*)Rxbuff,(const char*)":");
+ 153   2          if(strx[1]=='T')
+ 154   2          {
+ 155   3            for(i=0;i<2;i++)
+ 156   3              wifi_data[i]=strx[2+i];
+ 157   3            str_time.year=string_to_uchar(wifi_data);
+ 158   3      
+ 159   3            for(i=0;i<2;i++)
+ 160   3              wifi_data[i]=strx[4+i];
+ 161   3            str_time.month=string_to_uchar(wifi_data);
+ 162   3            
+ 163   3            for(i=0;i<2;i++)
+ 164   3              wifi_data[i]=strx[6+i];
+ 165   3            str_time.date=string_to_uchar(wifi_data);
+ 166   3          
+ 167   3            for(i=0;i<2;i++)
+ 168   3              wifi_data[i]=strx[8+i];
+ 169   3            str_time.hour=string_to_uchar(wifi_data);
+ 170   3            
+ 171   3            for(i=0;i<2;i++)
+ 172   3              wifi_data[i]=strx[10+i];
+ 173   3            str_time.min=string_to_uchar(wifi_data);
+ 174   3            
+ 175   3            for(i=0;i<2;i++)
+ 176   3              wifi_data[i]=strx[12+i];
+ 177   3            str_time.sec=string_to_uchar(wifi_data);
+ 178   3            set_time(str_time);
+C51 COMPILER V9.54   MAIN2233                                                              05/27/2019 15:40:45 PAGE 4   
+
+ 179   3            
+ 180   3            LED1=~LED1;delay_ms(80);
+ 181   3            LED1=~LED1;delay_ms(5);
+ 182   3        }
+ 183   2        
+ 184   2          
+ 185   2          
+ 186   2          if(strx[1]=='S'&&strx[2]=='O'&&strx[3]=='N')
+ 187   2          {
+ 188   3            sleep_flag=1;
+ 189   3            LED1=~LED1;delay_ms(80);
+ 190   3            LED1=~LED1;delay_ms(5);
+ 191   3            write_IIC(SLEEP_FLAG_ADDR,sleep_flag);
+ 192   3          }
+ 193   2          else if(strx[1]=='S'&&strx[2]=='O'&&strx[3]=='F')
+ 194   2          {
+ 195   3            sleep_flag=0;
+ 196   3            LED1=~LED1;delay_ms(80);
+ 197   3            LED1=~LED1;delay_ms(5);
+ 198   3            write_IIC(SLEEP_FLAG_ADDR,sleep_flag);
+ 199   3          }
+ 200   2          if(strx[1]=='S' && strx[2]=='S')
+ 201   2          {
+ 202   3            if(sleep_flag==1)
+ 203   3            {
+ 204   4              for(i=0;i<2;i++)
+ 205   4                wifi_data[i]=strx[3+i];
+ 206   4              str_time_sleep[0].hour=string_to_uchar(wifi_data);
+ 207   4              
+ 208   4              for(i=0;i<2;i++)
+ 209   4                wifi_data[i]=strx[5+i];
+ 210   4              str_time_sleep[0].min=string_to_uchar(wifi_data);       
+ 211   4              LED1=~LED1;delay_ms(80);
+ 212   4              LED1=~LED1;delay_ms(5);
+ 213   4              write_IIC(SLEEP0_ADDR,str_time_sleep[0].hour);
+ 214   4              write_IIC(SLEEP0_ADDR+1,str_time_sleep[0].min);
+ 215   4            }
+ 216   3          }
+ 217   2          if(strx[1]=='S' && strx[2]=='E')
+ 218   2          {
+ 219   3            if(sleep_flag==1)
+ 220   3            {
+ 221   4              for(i=0;i<2;i++)
+ 222   4                wifi_data[i]=strx[3+i];
+ 223   4              str_time_sleep[1].hour=string_to_uchar(wifi_data);
+ 224   4              for(i=0;i<2;i++)
+ 225   4                wifi_data[i]=strx[5+i];
+ 226   4              str_time_sleep[1].min=string_to_uchar(wifi_data);
+ 227   4              LED1=~LED1;delay_ms(80);
+ 228   4              LED1=~LED1;delay_ms(5);
+ 229   4              write_IIC(SLEEP1_ADDR,str_time_sleep[1].hour);
+ 230   4              write_IIC(SLEEP1_ADDR+1,str_time_sleep[1].min);
+ 231   4            }
+ 232   3          }
+ 233   2          if(strx[1]=='A' && strx[2]=='O' && strx[3]=='N')
+ 234   2          {
+ 235   3            LED1=~LED1;delay_ms(80);
+ 236   3            LED1=~LED1;delay_ms(5);
+ 237   3            alarm_wifi_state[0]=1;
+ 238   3              for(i=0;i<7;i++)
+ 239   3              {
+ 240   4                alarm_show_flag[0][i]=0xff;
+C51 COMPILER V9.54   MAIN2233                                                              05/27/2019 15:40:45 PAGE 5   
+
+ 241   4              }
+ 242   3          }
+ 243   2          else if(strx[1]=='A' && strx[2]=='O' && strx[3]=='F')
+ 244   2          {
+ 245   3            alarm_wifi_state[0]=0;
+ 246   3            LED1=~LED1;delay_ms(80);
+ 247   3            LED1=~LED1;delay_ms(5);
+ 248   3              for(i=0;i<7;i++)
+ 249   3              {
+ 250   4                alarm_show_flag[0][i]=0x00;
+ 251   4              }
+ 252   3            str_time_alarm[0].hour=7;
+ 253   3            str_time_alarm[0].min=30;
+ 254   3          }   
+ 255   2          
+ 256   2          if(strx[1]=='B' && strx[2]=='O' && strx[3]=='N')
+ 257   2          {
+ 258   3            alarm_wifi_state[1]=1;
+ 259   3            LED1=~LED1;delay_ms(80);
+ 260   3            LED1=~LED1;delay_ms(5);
+ 261   3            for(i=0;i<7;i++)
+ 262   3            {
+ 263   4              alarm_show_flag[1][i]=0xff;
+ 264   4            }
+ 265   3          }
+ 266   2          else if(strx[1]=='B' && strx[2]=='O' && strx[3]=='F')
+ 267   2          {
+ 268   3            alarm_wifi_state[1]=0;
+ 269   3            LED1=~LED1;delay_ms(80);
+ 270   3            LED1=~LED1;delay_ms(5);
+ 271   3      
+ 272   3            for(i=0;i<7;i++)
+ 273   3            {
+ 274   4              alarm_show_flag[1][i]=0x00;
+ 275   4            }
+ 276   3            str_time_alarm[1].hour=7;
+ 277   3            str_time_alarm[1].min=30;
+ 278   3          }       
+ 279   2          //闹铃A
+ 280   2          if(strx[1]=='A'  &&strx[2]!='O')
+ 281   2          {
+ 282   3            if( alarm_wifi_state[0]==1)
+ 283   3            {
+ 284   4              for(i=0;i<2;i++)
+ 285   4                wifi_data[i]=strx[2+i];
+ 286   4              str_time_alarm[0].hour=string_to_uchar(wifi_data);
+ 287   4              
+ 288   4              for(i=0;i<2;i++)
+ 289   4                wifi_data[i]=strx[4+i];
+ 290   4              str_time_alarm[0].min=string_to_uchar(wifi_data);
+ 291   4            }
+ 292   3            str_time_alarm_flag[0]=str_time_alarm[0];
+ 293   3            LED1=~LED1;delay_ms(80);
+ 294   3            LED1=~LED1;delay_ms(5);
+ 295   3          }
+ 296   2          //闹铃B
+ 297   2          if(strx[1]=='B' && strx[2]!='O')
+ 298   2          {
+ 299   3            if(alarm_wifi_state[1]==1)
+ 300   3            {     
+ 301   4              for(i=0;i<2;i++)
+ 302   4                wifi_data[i]=strx[2+i];
+C51 COMPILER V9.54   MAIN2233                                                              05/27/2019 15:40:45 PAGE 6   
+
+ 303   4              str_time_alarm[1].hour=string_to_uchar(wifi_data);
+ 304   4              
+ 305   4              for(i=0;i<2;i++)
+ 306   4                wifi_data[i]=strx[4+i];
+ 307   4              str_time_alarm[1].min=string_to_uchar(wifi_data);
+ 308   4            }
+ 309   3            str_time_alarm_flag[1]=str_time_alarm[1];
+ 310   3            LED1=~LED1;delay_ms(80);
+ 311   3            LED1=~LED1;delay_ms(5);
+ 312   3          }   
+ 313   2                //温度上下限调节
+ 314   2            if(strx[1]=='P')
+ 315   2            {
+ 316   3              if(strx[2]!='E')
+ 317   3              {
+ 318   4                for(i=0;i<2;i++)
+ 319   4                  wifi_data_temp[i]=strx[2+i];
+ 320   4                up_temper=string_to_uchar(wifi_data_temp);
+ 321   4                for(i=0;i<2;i++)
+ 322   4                  wifi_data_temp[i]=strx[4+i];
+ 323   4                down_temper=string_to_uchar(wifi_data_temp);
+ 324   4              }
+ 325   3              LED1=~LED1;delay_ms(80);
+ 326   3              LED1=~LED1;delay_ms(5);
+ 327   3              write_IIC(DAT_ADDR,down_temper);
+ 328   3              write_IIC(DAT_ADDR+1,up_temper);  
+ 329   3            }
+ 330   2            
+ 331   2            if(strx[1]=='C') //校正液晶背光
+ 332   2            {
+ 333   3              LED1=~LED1;delay_ms(80);
+ 334   3              LED1=~LED1;delay_ms(5);
+ 335   3              Screen_Con(LIGHT_SET);delay_ms(5);
+ 336   3            }
+ 337   2            
+ 338   2            if(strx[1]=='l')
+ 339   2            {
+ 340   3              LED1=~LED1;delay_ms(80);
+ 341   3              LED1=~LED1;delay_ms(5);
+ 342   3              if(strx[2]=='0')//关闭
+ 343   3              {
+ 344   4                wifi_light=0;
+ 345   4                wifi_light_flag=0;
+ 346   4                if(light==1)
+ 347   4                {
+ 348   5                  Screen_Con(LIGHT_SET);delay_ms(5);
+ 349   5                  light=0;
+ 350   5                }
+ 351   4              }
+ 352   3              else if(strx[2]=='1')//智能
+ 353   3              {
+ 354   4                wifi_light=1;
+ 355   4                wifi_light_flag=1;
+ 356   4              }
+ 357   3              else if(strx[2]=='2')//开启
+ 358   3              {
+ 359   4                wifi_light=2;
+ 360   4                wifi_light_flag=2;
+ 361   4                if(light==0)
+ 362   4                {
+ 363   5                  Screen_Con(LIGHT_SET);delay_ms(5);
+ 364   5                  light=1;
+C51 COMPILER V9.54   MAIN2233                                                              05/27/2019 15:40:45 PAGE 7   
+
+ 365   5                }
+ 366   4              }
+ 367   3              write_IIC(WIFI_LIGHT_ADDR, wifi_light);
+ 368   3              write_IIC(WIFI_LIGHT_FLAG_ADDR, wifi_light_flag);
+ 369   3            }
+ 370   2            
+ 371   2          //音乐选择
+ 372   2            if(strx[1]=='M')
+ 373   2            {
+ 374   3              if(strx[2]=='1')
+ 375   3              {
+ 376   4                music_num=1;
+ 377   4              }
+ 378   3              else if(strx[2]=='2')
+ 379   3              {
+ 380   4                music_num=2;
+ 381   4              }
+ 382   3              else if(strx[2]=='3')
+ 383   3              {
+ 384   4                music_num=3;
+ 385   4              }
+ 386   3              LED1=~LED1;delay_ms(80);
+ 387   3              LED1=~LED1;delay_ms(5);
+ 388   3              write_IIC(MUSIC_IIC_ADDR, music_num);
+ 389   3            }
+ 390   2            
+ 391   2            //整点报时开关
+ 392   2            if(strx[1]=='F' && strx[2]=='O' && strx[3]=='N')
+ 393   2            {
+ 394   3              broadcast_now_time_flag=1;
+ 395   3              broadcast_now_time_flag_flag=1;
+ 396   3              LED1=~LED1;delay_ms(80);
+ 397   3              LED1=~LED1;delay_ms(5);
+ 398   3              write_IIC(NOW_TIME_ADDR,broadcast_now_time_flag);
+ 399   3              write_IIC(NOW_TIME_FLAG_ADDR,broadcast_now_time_flag_flag);
+ 400   3            }
+ 401   2            else if(strx[1]=='F' && strx[2]=='O' && strx[3]=='F')
+ 402   2            {
+ 403   3              broadcast_now_time_flag=0;
+ 404   3              broadcast_now_time_flag_flag=0;
+ 405   3              LED1=~LED1;delay_ms(80);
+ 406   3              LED1=~LED1;delay_ms(5);
+ 407   3              write_IIC(NOW_TIME_FLAG_ADDR,broadcast_now_time_flag_flag);
+ 408   3              write_IIC(NOW_TIME_ADDR,broadcast_now_time_flag);
+ 409   3            }
+ 410   2            //每日播报开关
+ 411   2            if(strx[1]=='G' && strx[2]=='O' && strx[3]=='N')
+ 412   2            {
+ 413   3              broadcast_morning_flag=1;
+ 414   3              broadcast_morning_flag_flag=1;
+ 415   3              LED1=~LED1;delay_ms(80);
+ 416   3              LED1=~LED1;delay_ms(5);
+ 417   3              write_IIC(MORNING_ADDR,broadcast_morning_flag);
+ 418   3              write_IIC(MORNING_FLAG_ADDR,broadcast_morning_flag_flag);
+ 419   3            }
+ 420   2            else if(strx[1]=='G' && strx[2]=='O' && strx[3]=='F')
+ 421   2            {
+ 422   3              broadcast_morning_flag_flag=0;
+ 423   3              broadcast_morning_flag=0;
+ 424   3              LED1=~LED1;delay_ms(80);
+ 425   3              LED1=~LED1;delay_ms(5);
+ 426   3              write_IIC(MORNING_ADDR,broadcast_morning_flag);
+C51 COMPILER V9.54   MAIN2233                                                              05/27/2019 15:40:45 PAGE 8   
+
+ 427   3              write_IIC(MORNING_FLAG_ADDR,broadcast_morning_flag_flag);
+ 428   3            }
+ 429   2            
+ 430   2          if(strx[1]=='V')
+ 431   2          {
+ 432   3              if(strx[2]=='1')
+ 433   3              {
+ 434   4                volume=1;
+ 435   4              }
+ 436   3              else if(strx[2]=='2')
+ 437   3              {
+ 438   4                volume=2;
+ 439   4              }
+ 440   3              else if(strx[2]=='3')
+ 441   3              {
+ 442   4                volume=3;
+ 443   4              }
+ 444   3              else if(strx[2]=='4')
+ 445   3              {
+ 446   4                volume=4;
+ 447   4              }     
+ 448   3              else if(strx[2]=='5')
+ 449   3              {
+ 450   4                volume=5;
+ 451   4              }
+ 452   3              else if(strx[2]=='6')
+ 453   3              {
+ 454   4                volume=6;
+ 455   4              }
+ 456   3              else if(strx[2]=='7')
+ 457   3              {
+ 458   4                volume=7;
+ 459   4              }
+ 460   3              else if(strx[2]=='8')
+ 461   3              {
+ 462   4                volume=8;
+ 463   4              }
+ 464   3              else if(strx[2]=='9')
+ 465   3              {
+ 466   4                volume=9;
+ 467   4              }
+ 468   3              LED1=~LED1;delay_ms(80);
+ 469   3              LED1=~LED1;delay_ms(5);
+ 470   3              write_IIC(VOLUME_ADDR, volume);
+ 471   3          }
+ 472   2          
+ 473   2          //第一个闹铃星期几
+ 474   2          if(strx[1]=='D')
+ 475   2          {
+ 476   3            LED1=~LED1;delay_ms(80);
+ 477   3          LED1=~LED1;delay_ms(5);
+ 478   3      //      Screen_Con(LIGHT_SET);delay_ms(80);
+ 479   3      //      Screen_Con(LIGHT_SET);delay_ms(5);
+ 480   3            if(alarm_wifi_state[0]==1)
+ 481   3            {
+ 482   4              for(i=0;i<7;i++)
+ 483   4              {
+ 484   5                if(strx[2+i]=='1')
+ 485   5                {
+ 486   6                  alarm_show_flag[0][i]=0xff;
+ 487   6                }
+ 488   5                else if(strx[2+i]=='0')
+C51 COMPILER V9.54   MAIN2233                                                              05/27/2019 15:40:45 PAGE 9   
+
+ 489   5                {
+ 490   6                  alarm_show_flag[0][i]=0x00;
+ 491   6                }
+ 492   5              }
+ 493   4            }
+ 494   3            if(alarm_wifi_state[0]==0)
+ 495   3            {
+ 496   4              for(i=0;i<7;i++)
+ 497   4              {
+ 498   5                alarm_show_flag[0][i]=0x00;
+ 499   5              }
+ 500   4            }
+ 501   3          }
+ 502   2          //第2个闹铃星期几
+ 503   2          if(strx[1]=='E')
+ 504   2          {
+ 505   3            LED1=~LED1;delay_ms(80);
+ 506   3            LED1=~LED1;delay_ms(5);
+ 507   3            if(alarm_wifi_state[1]==1)
+ 508   3            {
+ 509   4              for(i=0;i<7;i++)
+ 510   4              {
+ 511   5                if(strx[2+i]=='1')
+ 512   5                {
+ 513   6                  alarm_show_flag[1][i]=0xff;
+ 514   6                }
+ 515   5                else if(strx[2+i]=='0')
+ 516   5                {
+ 517   6                  alarm_show_flag[1][i]=0x00;
+ 518   6                }
+ 519   5              }
+ 520   4            }
+ 521   3            if(alarm_wifi_state[1]==0)
+ 522   3            {
+ 523   4              for(i=0;i<7;i++)
+ 524   4              {
+ 525   5                alarm_show_flag[1][i]=0x00;
+ 526   5              }
+ 527   4            }
+ 528   3          }
+ 529   2          
+ 530   2          if(strx[1]=='K' && strx[2]=='O' && strx[3]=='N')
+ 531   2          {
+ 532   3            start_music=1;
+ 533   3            LED1=~LED1;delay_ms(80);
+ 534   3            LED1=~LED1;delay_ms(5);
+ 535   3            write_IIC(START_MUSIC_ADDR,start_music);
+ 536   3          }
+ 537   2          else if(strx[1]=='K' && strx[2]=='O' && strx[3]=='F')
+ 538   2          {
+ 539   3            start_music=0;
+ 540   3            LED1=~LED1;delay_ms(80);
+ 541   3            LED1=~LED1;delay_ms(5);
+ 542   3            write_IIC(START_MUSIC_ADDR,start_music);
+ 543   3          }
+ 544   2          alarm_write_iic(str_time_alarm,alarm_show_flag);
+ 545   2          Clear_Buffer(); 
+ 546   2          Clear_Rxbuff();
+ 547   2          strx=NULL;
+ 548   2          str2[0]=NULL;
+*** WARNING C260 IN LINE 548 OF main2233.c: '=': pointer truncation
+ 549   2          wifi_data[0]=NULL;
+C51 COMPILER V9.54   MAIN2233                                                              05/27/2019 15:40:45 PAGE 10  
+
+*** WARNING C260 IN LINE 549 OF main2233.c: '=': pointer truncation
+ 550   2          sleep_data[0]=NULL;
+*** WARNING C260 IN LINE 550 OF main2233.c: '=': pointer truncation
+ 551   2          //free(strx);
+ 552   2        }
+ 553   1        return ;
+ 554   1      }
+ 555          
+ 556          
+ 557          void wifi_init()
+ 558          {
+ 559   1      
+ 560   1        delayms(200);
+ 561   1        ESP8266_SERVER();
+ 562   1        delayms(100);
+ 563   1        strx=NULL;
+ 564   1        Screen_Con(LIGHT_SET);Delay_1ms(DELAY_TIME);
+ 565   1      }
+ 566          void UARTInterrupt(void) interrupt 4//接收
+ 567          { 
+ 568   1        if(RI)
+ 569   1        {
+ 570   2          Rxbuff[Rxnum++]=SBUF;
+ 571   2          RI = 0;
+ 572   2          if(Rxnum>=40)
+ 573   2            Rxnum=0;
+ 574   2         }
+ 575   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   3496    ----
+   CONSTANT SIZE    =     98    ----
+   XDATA SIZE       =      2       8
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     79      18
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  3 WARNING(S),  0 ERROR(S)

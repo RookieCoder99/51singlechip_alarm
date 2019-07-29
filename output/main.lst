@@ -1,0 +1,286 @@
+C51 COMPILER V9.54   MAIN                                                                  05/27/2019 15:40:44 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\output\main.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE main.c LARGE OPTIMIZE(8,SIZE) BROWSE DEBUG OBJECTEXTEND PRINT(.\output\m
+                    -ain.lst) TABS(2) OBJECT(.\output\main.obj)
+
+line level    source
+
+   1          /*****************************************************************************
+   2          * 文件名：main.c
+   3          *****************************************************************************/
+   4          #include <stdio.h>
+   5          #include "delay.h"
+   6          #include "main.h"
+   7          #include "ds1302.h"
+   8          #include "ds18B20.h"
+   9          #include "hb.h"
+  10          #include "iic.h"
+  11          #include "yuyin.h"
+  12          #include "alarm.h"
+  13          #include "main2233.h"
+  14          #include "switch_screen.h"
+  15          /****************闹钟功能部分变量*******************************/
+  16          //周几是否有闹钟标志
+  17          uchar  alarm_show_flag[2][7]=
+  18          {
+  19            {0xff,0xff,0xff,0xff,0xff,0xff,0xff},
+  20            {0xff,0xff,0xff,0xff,0xff,0xff,0xff}
+  21          };
+  22          bit screen_num_flag=1;
+  23          bit leap_month_flag=0;
+  24          bit light=0;//液晶亮不亮
+  25          uchar down_temper=0, up_temper=30;  //温度上、下限；
+  26          uchar wifi_light_flag;
+  27          uchar  wifi_light=1;
+  28          uchar night_light=0;
+  29          uchar festival_num;
+  30          bit start_music=1;
+  31          uchar broadcast_morning_flag_flag;
+  32          uchar broadcast_now_time_flag_flag;
+  33          uchar broadcast_morning_flag=1;//早上是否七点播报
+  34          uchar broadcast_now_time_flag=1;//整点是否播报
+  35          //闹钟选中位置选项0-none;1-sun;2-mon;..
+  36          uchar  alarm_pos=0;//
+  37          uchar  alarm_set=0;//当前为第几个闹钟,0,代表时钟界面
+  38          uchar  music_num=1;
+  39          uchar  volume=1;
+  40          uchar  pbuff[2] = {0,0};    //温度整数、小数部分
+  41          uchar sleep_flag;
+  42          uchar broadcast_morning_flag_tmp,broadcast_now_time_flag_tmp,wifi_light_tmp;
+  43          uchar  screen_num=0;  //界面号:0-normal;1-only time;2-only date.
+  44          /***********************************
+  45            光标的位置
+  46            0-none;1-year;2-month;3-date;4-hour;5-min
+  47          *************************************/
+  48          uchar  cur_pos=0;
+  49          SYSTEM_TIME str_time={17,7,23,12,1,0};//系统时间
+  50          SYSTEM_TIME str_time_lunar;//农历时间
+  51          SYSTEM_TIME str_time_alarm[2]={{0,0,0,1,0,0},{0,0,0,3,0,0}};
+  52          SYSTEM_TIME str_time_alarm_flag[2];
+  53          SYSTEM_TIME str_time_sleep[2]={{0,0,0,22,30,0},{0,0,0,7,30,0}};
+  54          
+C51 COMPILER V9.54   MAIN                                                                  05/27/2019 15:40:44 PAGE 2   
+
+  55          /******************************************************
+  56          * 主函数：完成系统功能
+  57          ******************************************************/
+  58          
+  59          void main(void)
+  60          {
+  61   1        uchar check_sensor=0x00;//检测人体感应的标志
+  62   1        uchar check_sensor2=0x01;
+  63   1        ds1302_init();    //DS1302端口初始化
+  64   1        set_time(str_time);
+  65   1        InitUART();
+*** WARNING C206 IN LINE 65 OF main.c: 'InitUART': missing function-prototype
+  66   1        init_IIC();
+  67   1        EA = 1;
+  68   1        temper_convert(); //启动温度转换
+  69   1        delay_ms(30);
+  70   1        
+  71   1        /*********以下从E2PROM中读取上次设置的数据**********/
+  72   1        down_temper=read_IIC(DAT_ADDR);
+  73   1        up_temper=read_IIC(DAT_ADDR+1);
+  74   1        start_music=read_IIC(START_MUSIC_ADDR);
+  75   1        alarm_read_iic();
+  76   1        volume=read_IIC(VOLUME_ADDR);
+  77   1        music_num=read_IIC(MUSIC_IIC_ADDR);
+  78   1        screen_num=read_IIC(SCREEN_NUM_ADDR);
+  79   1        broadcast_morning_flag=read_IIC(MORNING_ADDR);
+  80   1        broadcast_now_time_flag=read_IIC(NOW_TIME_ADDR);
+  81   1        wifi_light=read_IIC(WIFI_LIGHT_ADDR);
+  82   1        broadcast_morning_flag_flag=read_IIC(MORNING_FLAG_ADDR);
+  83   1        broadcast_now_time_flag_flag=read_IIC(NOW_TIME_FLAG_ADDR);
+  84   1        wifi_light_flag=read_IIC(WIFI_LIGHT_FLAG_ADDR);
+  85   1        str_time_sleep[0].hour=read_IIC(SLEEP0_ADDR);
+  86   1        str_time_sleep[0].min=read_IIC(SLEEP0_ADDR+1);
+  87   1        str_time_sleep[1].hour=read_IIC(SLEEP1_ADDR);
+  88   1        str_time_sleep[1].min=read_IIC(SLEEP1_ADDR+1);
+  89   1        sleep_flag=read_IIC(SLEEP_FLAG_ADDR);
+  90   1        hb_init();
+  91   1        //wifi_init();
+  92   1        
+  93   1        while(1)
+  94   1        {
+  95   2          cur_pos=0;
+  96   2          draw_frame();
+  97   2          /*************显示时间界面************/
+  98   2          show_time_screen();
+  99   2          
+ 100   2          /***************人体红外传感器************/
+ 101   2          if(wifi_light==1)
+ 102   2          {
+ 103   3            if(light==0)
+ 104   3            {
+ 105   4              if(HUMAN_SENSOR==0 && check_sensor==1)
+ 106   4              {
+ 107   5                check_sensor=0;
+ 108   5                Screen_Con(LIGHT_SET);
+ 109   5                light=~light;
+ 110   5                Delay_1ms(DELAY_TIME);
+ 111   5              }
+ 112   4              if(HUMAN_SENSOR==1 && check_sensor==0)
+ 113   4              {
+ 114   5                check_sensor=1;
+ 115   5                Screen_Con(LIGHT_SET);
+C51 COMPILER V9.54   MAIN                                                                  05/27/2019 15:40:44 PAGE 3   
+
+ 116   5                light=~light;
+ 117   5              }
+ 118   4            }
+ 119   3            else
+ 120   3            {
+ 121   4              if(HUMAN_SENSOR==0 && check_sensor2==1)
+ 122   4              {
+ 123   5                check_sensor=0;
+ 124   5                Screen_Con(LIGHT_SET);
+ 125   5                light=~light;
+ 126   5                Delay_1ms(DELAY_TIME);
+ 127   5              }
+ 128   4              if(HUMAN_SENSOR==1 && check_sensor2==0)
+ 129   4              {
+ 130   5                check_sensor=1;
+ 131   5                Screen_Con(LIGHT_SET);
+ 132   5                light=~light;
+ 133   5              }
+ 134   4              
+ 135   4            }
+ 136   3          }
+ 137   2          else if(wifi_light==2)
+ 138   2          {
+ 139   3            if(light==0)
+ 140   3            {
+ 141   4              Screen_Con(LIGHT_SET);
+ 142   4              light=~light;
+ 143   4              if(night_light==1)
+ 144   4              {
+ 145   5                delay_ms(1000);
+ 146   5                night_light=0;
+ 147   5              }
+ 148   4            }
+ 149   3            
+ 150   3          }
+ 151   2          else if(wifi_light==0)
+ 152   2          {
+ 153   3            if(light==1)
+ 154   3            {
+ 155   4              Screen_Con(LIGHT_SET);
+ 156   4              light=~light;
+ 157   4            }
+ 158   3          }
+ 159   2          /************判断闹钟是否到时间响******************/
+ 160   2          check_alarm_time(str_time, str_time_alarm,alarm_show_flag);
+ 161   2          
+ 162   2          if(str_time.min==0 && str_time.sec==0)
+ 163   2          {
+ 164   3            if(str_time.hour==8 && broadcast_morning_flag==1)
+ 165   3            {
+ 166   4              broadcast_morning(str_time);
+ 167   4              broadcast_temp(pbuff);
+ 168   4            }
+ 169   3           else if(broadcast_now_time_flag==1 )
+ 170   3            {
+ 171   4              check_now_time(str_time);
+ 172   4              broadcast_temp(pbuff);
+ 173   4            }
+ 174   3          }
+ 175   2        /****************切换时间显示界面***************/
+ 176   2          switch_screen();
+ 177   2        /****************闹钟音乐显示界面***************/
+C51 COMPILER V9.54   MAIN                                                                  05/27/2019 15:40:44 PAGE 4   
+
+ 178   2          music_screen();
+ 179   2        /**********切换光标位置以调节时间***********/
+ 180   2          adjust_time();
+ 181   2        /*************调节声音*************************/
+ 182   2          volume_control();
+ 183   2        /*******************************************************
+ 184   2        *闹钟功能实现主体
+ 185   2        *包括按键进入闹钟，闹钟调时间，选择闹钟音乐等功能
+ 186   2        ********************************************************/
+ 187   2          alarm_function();
+ 188   2          /*************app控制单片机***************************/
+ 189   2          //Get_Clinet();
+ 190   2          
+ 191   2          if(sleep_flag==1)
+ 192   2          {
+ 193   3            if((str_time.hour>str_time_sleep[0].hour 
+ 194   3              ||(str_time.hour==str_time_sleep[0].hour &&
+ 195   3                  str_time.min>=str_time_sleep[0].min)) ||
+ 196   3            
+ 197   3              (str_time.hour<str_time_sleep[1].hour 
+ 198   3              ||(str_time.hour==str_time_sleep[1].hour &&
+ 199   3                  str_time.min<=str_time_sleep[1].min)))
+ 200   3            {
+ 201   4              wifi_light=0;
+ 202   4              broadcast_morning_flag=0;
+ 203   4              broadcast_now_time_flag=0;
+ 204   4              if(!ALARM)
+ 205   4              {
+ 206   5                delay_ms(350);
+ 207   5                if(!ALARM)
+ 208   5                {
+ 209   6                    night_light=1;
+ 210   6                    wifi_light=2;
+ 211   6                }
+ 212   5              }
+ 213   4            }
+ 214   3            else
+ 215   3            {
+ 216   4                wifi_light=wifi_light_flag;
+ 217   4                broadcast_morning_flag=broadcast_morning_flag_flag;
+ 218   4                broadcast_now_time_flag=broadcast_now_time_flag_flag;
+ 219   4            }
+ 220   3          }
+ 221   2          else
+ 222   2          {
+ 223   3            wifi_light=wifi_light_flag;
+ 224   3            broadcast_morning_flag=broadcast_morning_flag_flag;
+ 225   3            broadcast_now_time_flag=broadcast_now_time_flag_flag;
+ 226   3          }
+ 227   2          
+ 228   2          /***************摇晃可以切换背光**********************/
+ 229   2          
+ 230   2      //      if(SHAKE==0)
+ 231   2      //      {
+ 232   2      //        delay_ms(5);
+ 233   2      //        if(SHAKE==0)
+ 234   2      //        {
+ 235   2      //          wifi_light+=1;
+ 236   2      //          if(wifi_light==1)
+ 237   2      //          {
+ 238   2      //            wifi_light_flag=1;
+ 239   2      //          }
+C51 COMPILER V9.54   MAIN                                                                  05/27/2019 15:40:44 PAGE 5   
+
+ 240   2      //          else if(wifi_light==2)
+ 241   2      //          {
+ 242   2      //            wifi_light_flag=2;
+ 243   2      //          }
+ 244   2      //          if(wifi_light==3)
+ 245   2      //          {
+ 246   2      //            wifi_light=0;
+ 247   2      //            wifi_light_flag=0;
+ 248   2      //          }
+ 249   2      //        }
+ 250   2      //      }
+ 251   2          
+ 252   2        }
+ 253   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    704    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =     84       2
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =      4    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)

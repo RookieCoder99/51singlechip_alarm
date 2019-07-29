@@ -1,0 +1,1906 @@
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE YUYIN
+OBJECT MODULE PLACED IN .\output\yuyin.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE yuyin.c LARGE OPTIMIZE(8,SIZE) BROWSE DEBUG OBJECTEXTEND PRINT(.\output\
+                    -yuyin.lst) TABS(2) OBJECT(.\output\yuyin.obj)
+
+line level    source
+
+   1          /******************
+   2          *******************/
+   3          #include <reg51.H>
+   4          #include <intrins.h>
+   5          #include "main.h"
+   6          #include "delay.h"
+   7          #include "hb.h"
+   8          #include "ds1302.h"
+   9          #include "iic.h"
+  10          #include "ds18B20.h"
+  11          #include "switch_screen.h"
+  12          uchar MUSIC_YY_ADDR=0x01;
+  13          uchar wakeup_late=0;
+  14          uchar music_play_time=0;
+  15          uchar i_alarm=0;
+  16          extern uchar volume;
+  17          extern SYSTEM_TIME str_time_alarm_flag[2];
+  18          extern bit leap_month_flag;
+  19          extern uchar festival_num;
+  20          extern uchar music_num;//第几个音乐是闹铃,默认为第一个
+  21          extern uchar alarm_set;
+  22          extern SYSTEM_TIME str_time_alarm[2];
+  23          extern uchar pbuff[2];
+  24          extern SYSTEM_TIME str_time;
+  25          extern SYSTEM_TIME str_time_lunar;
+  26          extern uchar alarm_pos;//
+  27          extern uchar alarm_set;
+  28          extern uchar cur_pos;
+  29          extern uchar screen_num;
+  30          extern uchar up_temper;
+  31          extern uchar down_temper;
+  32          void Delay1us(uchar z)//实际是10微秒
+  33          {
+  34   1        uchar v;
+  35   1        for(v=z;v>0;v--)
+  36   1        {
+  37   2          _nop_();_nop_();
+  38   2          _nop_();_nop_();
+  39   2          _nop_();_nop_();
+  40   2        }
+  41   1      }
+  42          void SendData (uchar MUSIC_YY_ADDR)//?????
+  43          {
+  44   1          uchar i;
+  45   1      
+  46   1          EA = 0;/*???????,????????  */
+  47   1      
+  48   1          YYSDA = 1;/*????  */
+  49   1          Delay1us ( 100 );
+  50   1          YYSDA = 0;/*?????*/
+  51   1          Delay1us ( 220 );/*?????????2ms,??????310ms  */
+  52   1      
+  53   1          for ( i = 0; i < 8; i++ ) /*??8???  */
+  54   1          {
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 2   
+
+  55   2              YYSDA = 1;
+  56   2              if ( MUSIC_YY_ADDR & 0x01 ) /*3:1?????1,??????????  */
+  57   2              {
+  58   3                  Delay1us ( 50 );
+  59   3                  YYSDA = 0;
+  60   3                  Delay1us ( 20);
+  61   3              }
+  62   2              else              /*1:3?????0 ,??????????  */
+  63   2              {
+  64   3                  Delay1us ( 20 );
+  65   3                  YYSDA = 0;
+  66   3                  Delay1us ( 50 );
+  67   3              }
+  68   2              MUSIC_YY_ADDR >>= 1;
+  69   2          }
+  70   1          YYSDA = 1;
+  71   1          EA = 1;//????
+  72   1      }
+  73          
+  74          void choose_music(void)
+  75          {
+  76   1        clean_all();
+  77   1        SendData(0x0a);
+  78   1        SendData(volume);
+  79   1        SendData(0x00);
+  80   1        SendData(0x0c);
+  81   1        while(1)
+  82   1        {
+  83   2          show_choose_music(music_num);
+  84   2          //music_num=0;//是否已经设置过闹钟音乐,1代表设置为闹钟音乐
+  85   2          //开始放音乐,从第一个开始
+  86   2          SendData(0x0a);     
+  87   2          SendData(0x05);
+  88   2          SendData(MUSIC_YY_ADDR+music_num-0x01);//从设定的音乐开始放
+  89   2          SendData(0x0b);
+  90   2          while(!YYBUSY);
+  91   2          while(YYBUSY)
+  92   2          {
+  93   3            if(CHOOSE_MUSIC==0)//确认将当前歌曲设为闹铃
+  94   3            {
+  95   4              delay_ms(40);
+  96   4              if(CHOOSE_MUSIC==0)
+  97   4              {
+  98   5                break;
+  99   5              }
+ 100   4            }
+ 101   3            if(ADD==0)
+ 102   3            {
+ 103   4              delay_ms(90);
+ 104   4              if(ADD==0)
+ 105   4              {
+ 106   5                if(music_num==3)
+ 107   5                {
+ 108   6                  music_num=0;
+ 109   6                }
+ 110   5                music_num+=1;
+ 111   5                break;
+ 112   5              }
+ 113   4            }
+ 114   3            if(SUB==0)//
+ 115   3            {
+ 116   4              delay_ms(90);
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 3   
+
+ 117   4              if(SUB==0)
+ 118   4              {
+ 119   5                if(music_num==1)
+ 120   5                {
+ 121   6                  music_num=4;
+ 122   6                }
+ 123   5                music_num-=1;
+ 124   5                break;
+ 125   5              }
+ 126   4            }
+ 127   3          }
+ 128   2          if(CHOOSE_MUSIC==0)//确认将当前歌曲设为闹铃
+ 129   2          {
+ 130   3              delay_ms(40);
+ 131   3              if(CHOOSE_MUSIC==0)
+ 132   3              {
+ 133   4                //停止播放
+ 134   4                SendData(0x0a);
+ 135   4                SendData(0x05);
+ 136   4                SendData(MUSIC_YY_ADDR+music_num-0x01);
+ 137   4                SendData(0x12);
+ 138   4                clean_all();
+ 139   4                
+ 140   4      //          alarm_set=1;
+ 141   4      //          show_alarm_all(alarm_set);
+ 142   4      //          show_time_only(str_time_alarm[0]);
+ 143   4      //          show_alarm();
+ 144   4      //          start_blink_alarm();
+ 145   4                write_IIC(MUSIC_IIC_ADDR,music_num);
+ 146   4                break;
+ 147   4              }
+ 148   3          }
+ 149   2          if(MUSIC_YY_ADDR>0x03)
+ 150   2          {
+ 151   3            MUSIC_YY_ADDR=0x01;
+ 152   3          }
+ 153   2        }
+ 154   1      }
+ 155          void music_screen()
+ 156          {
+ 157   1            while(!CHOOSE_MUSIC)
+ 158   1            {
+ 159   2              delay_ms(40);
+ 160   2              if(CHOOSE_MUSIC!=0) //加这个因为那个按钮总是会误触导致抖动
+ 161   2              {
+ 162   3                break;
+ 163   3              }
+ 164   2              while(1)
+ 165   2              {
+ 166   3                if(CHOOSE_MUSIC==0)
+ 167   3                {
+ 168   4                  delay_ms(40);
+ 169   4                  if(CHOOSE_MUSIC==0)
+ 170   4                  {
+ 171   5                    choose_music();
+ 172   5                    break;
+ 173   5                  }             
+ 174   4                }
+ 175   3              }
+ 176   2              break;
+ 177   2            }
+ 178   1      }
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 4   
+
+ 179          void adjust_volume()
+ 180          {
+ 181   1      //初始音量为10
+ 182   1        SendData(0x0a);
+ 183   1        SendData(volume);
+ 184   1        SendData(0x00);
+ 185   1        SendData(0x0c);
+ 186   1        while(1)
+ 187   1        {
+ 188   2          show_volume(volume);
+ 189   2          
+ 190   2          if(ADD==0)
+ 191   2          {
+ 192   3            delay_ms(90);
+ 193   3            if(ADD==0)
+ 194   3            {
+ 195   4              if(volume==9)
+ 196   4              {
+ 197   5                volume-=1;
+ 198   5              }
+ 199   4              volume++;
+ 200   4              SendData(0x0a);
+ 201   4              SendData(volume);
+ 202   4              SendData(0x00);
+ 203   4              SendData(0x0c);
+ 204   4              //滴
+ 205   4              SendData(0x0a);
+ 206   4              SendData(0x02);
+ 207   4              SendData(0x05);
+ 208   4              SendData(0x0b);
+ 209   4              while(!YYBUSY);
+ 210   4              while(YYBUSY);
+ 211   4            }
+ 212   3          }
+ 213   2          if(SUB==0)
+ 214   2          {
+ 215   3            delay_ms(90);
+ 216   3            if(SUB==0)
+ 217   3            {
+ 218   4              if(volume==0)
+ 219   4              {
+ 220   5                volume+=1;
+ 221   5              }
+ 222   4              volume--;
+ 223   4              SendData(0x0a);
+ 224   4              SendData(volume);
+ 225   4              SendData(0x00);
+ 226   4              SendData(0x0c);
+ 227   4              //滴
+ 228   4              SendData(0x0a);
+ 229   4              SendData(0x02);
+ 230   4              SendData(0x05);
+ 231   4              SendData(0x0b);
+ 232   4              while(!YYBUSY);
+ 233   4              while(YYBUSY);
+ 234   4            }
+ 235   3          }
+ 236   2          if(VOLUME==0)
+ 237   2          {
+ 238   3            delay_ms(60);
+ 239   3            if(VOLUME==0)
+ 240   3            {
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 5   
+
+ 241   4              clean_all();
+ 242   4              break;
+ 243   4            }
+ 244   3          }
+ 245   2        }
+ 246   1        //eeprom
+ 247   1        write_IIC(VOLUME_ADDR,volume);
+ 248   1      }
+ 249          
+ 250          void volume_control()
+ 251          {
+ 252   1          while(!VOLUME && alarm_pos==0 && cur_pos==0)
+ 253   1          {
+ 254   2            delay_ms(30); 
+ 255   2            if(VOLUME!=0) //加这个因为那个按钮总是会误触导致抖动
+ 256   2            {
+ 257   3              break;
+ 258   3            }
+ 259   2            if(VOLUME==0)
+ 260   2            {
+ 261   3              delay_ms(50);
+ 262   3              if(VOLUME==0)
+ 263   3              {
+ 264   4                if(alarm_set==1 || alarm_set==2)
+ 265   4                {
+ 266   5                  stop_blink_alarm();
+ 267   5                }
+ 268   4                clean_all();
+ 269   4                adjust_volume();
+ 270   4                break;
+ 271   4              }
+ 272   3            }
+ 273   2          }
+ 274   1      }
+ 275          
+ 276          
+ 277          //判断怎么播报，01,0有时候念有时候不念
+ 278          void broadcast(uchar temp,uchar flag)
+ 279          {
+ 280   1        uchar shiwei;
+ 281   1        uchar gewei;
+ 282   1        uint int_temp=(uint)temp;
+ 283   1        shiwei=(uchar)int_temp/10;
+ 284   1        gewei=(uchar)int_temp%10;
+ 285   1        if(flag==1)//念十
+ 286   1        {
+ 287   2          switch(shiwei)
+ 288   2          {
+ 289   3            case 0:break;
+ 290   3            //数字10对应的文件号
+ 291   3            case 1://十位是1
+ 292   3              SendData(0x0a); 
+ 293   3              SendData(0x04);
+ 294   3              SendData(0x00);
+ 295   3              SendData(0x0b);
+ 296   3              while(!YYBUSY);
+ 297   3              while(YYBUSY)
+ 298   3              {
+ 299   4                str_time = read_time();   //读取时间    
+ 300   4                show_time_screen();
+ 301   4                /*
+ 302   4                hb_show_time(str_time);   //显示年、月、日、时、分、秒、星期
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 6   
+
+ 303   4                read_temper(pbuff);   //读取当前温度值
+ 304   4                temper_convert(); // 启动温度转换，需要750ms
+ 305   4                hb_show_temp(pbuff[0], pbuff[1]);   //显示当前温度
+ 306   4                */
+ 307   4              }
+ 308   3              break;
+ 309   3            default:
+ 310   3              SendData(0x0a);
+ 311   3              //数字文件都是3开头的，先传一个3，再传十位对应的数字
+ 312   3              SendData(0x03);
+ 313   3              SendData(shiwei);
+ 314   3              SendData(0x0b);
+ 315   3              while(!YYBUSY);
+ 316   3              while(YYBUSY)
+ 317   3              {
+ 318   4                  str_time = read_time();   //读取时间    
+ 319   4                  show_time_screen();
+ 320   4                  /*
+ 321   4                  hb_show_time(str_time);   //显示年、月、日、时、分、秒、星期
+ 322   4                  read_temper(pbuff);   //读取当前温度值
+ 323   4                  temper_convert(); // 启动温度转换，需要750ms
+ 324   4                  hb_show_temp(pbuff[0], pbuff[1]);   //显示当前温度
+ 325   4                */
+ 326   4              }
+ 327   3              SendData(0x0a); 
+ 328   3              //数字10是40开始
+ 329   3              SendData(0x04);
+ 330   3              SendData(0x00);
+ 331   3              SendData(0x0b);
+ 332   3              while(!YYBUSY);
+ 333   3              while(YYBUSY)
+ 334   3              {
+ 335   4                str_time = read_time();   //读取时间    
+ 336   4                show_time_screen();
+ 337   4                /*
+ 338   4                hb_show_time(str_time);   //显示年、月、日、时、分、秒、星期
+ 339   4                read_temper(pbuff);   //读取当前温度值
+ 340   4                temper_convert(); // 启动温度转换，需要750ms
+ 341   4                hb_show_temp(pbuff[0], pbuff[1]);   //显示当前温度
+ 342   4                */
+ 343   4              }
+ 344   3              //shi=1;
+ 345   3              break;
+ 346   3          }
+ 347   2          switch(gewei)
+ 348   2          {
+ 349   3            case 0:
+ 350   3              if(shiwei==0)
+ 351   3              {
+ 352   4                SendData(0x0a); 
+ 353   4                SendData(0x03);
+ 354   4                SendData(0x00);
+ 355   4                SendData(0x0b);
+ 356   4                while(!YYBUSY);
+ 357   4                while(YYBUSY)
+ 358   4                {
+ 359   5                  str_time = read_time();   //读取时间
+ 360   5                  show_time_screen();           
+ 361   5                  /*
+ 362   5                  hb_show_time(str_time);   //显示年、月、日、时、分、秒、星期
+ 363   5                  read_temper(pbuff);   //读取当前温度值
+ 364   5                  temper_convert(); // 启动温度转换，需要750ms
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 7   
+
+ 365   5                  hb_show_temp(pbuff[0], pbuff[1]);   //显示当前温度
+ 366   5                  */
+ 367   5                }
+ 368   4              }
+ 369   3                break;
+ 370   3            default:
+ 371   3              SendData(0x0a); 
+ 372   3              SendData(0x03);
+ 373   3              SendData(gewei);
+ 374   3              SendData(0x0b);
+ 375   3              while(!YYBUSY);
+ 376   3              while(YYBUSY)
+ 377   3              {
+ 378   4                str_time = read_time();   //读取时间    
+ 379   4                show_time_screen();
+ 380   4                /*
+ 381   4                hb_show_time(str_time);   //显示年、月、日、时、分、秒、星期
+ 382   4                read_temper(pbuff);   //读取当前温度值
+ 383   4                temper_convert(); // 启动温度转换，需要750ms
+ 384   4                hb_show_temp(pbuff[0], pbuff[1]);   //显示当前温度
+ 385   4                */
+ 386   4              }
+ 387   3              break;
+ 388   3          }
+ 389   2        }
+ 390   1        else//念1,0
+ 391   1        {
+ 392   2          SendData(0x0a); 
+ 393   2          SendData(0x03);
+ 394   2          SendData(shiwei);
+ 395   2          SendData(0x0b);
+ 396   2          while(!YYBUSY);
+ 397   2          while(YYBUSY)
+ 398   2          {
+ 399   3            str_time = read_time();   //读取时间    
+ 400   3            show_time_screen();
+ 401   3            /*
+ 402   3            hb_show_time(str_time);   //显示年、月、日、时、分、秒、星期
+ 403   3            read_temper(pbuff);   //读取当前温度值
+ 404   3            temper_convert(); // 启动温度转换，需要750ms
+ 405   3            hb_show_temp(pbuff[0], pbuff[1]);   //显示当前温度
+ 406   3            */
+ 407   3          }
+ 408   2          SendData(0x0a); 
+ 409   2          SendData(0x03);
+ 410   2          SendData(gewei);
+ 411   2          SendData(0x0b);
+ 412   2          while(!YYBUSY);
+ 413   2          while(YYBUSY)
+ 414   2          {
+ 415   3            str_time = read_time();   //读取时间    
+ 416   3            show_time_screen();
+ 417   3            /*
+ 418   3            hb_show_time(str_time);   //显示年、月、日、时、分、秒、星期
+ 419   3            read_temper(pbuff);   //读取当前温度值
+ 420   3            temper_convert(); // 启动温度转换，需要750ms
+ 421   3            hb_show_temp(pbuff[0], pbuff[1]);   //显示当前温度
+ 422   3            */
+ 423   3          }
+ 424   2        }
+ 425   1      }
+ 426          
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 8   
+
+ 427          
+ 428          
+ 429          void broadcast_temp(uchar pbuff[2])
+ 430          {
+ 431   1          //播报温度
+ 432   1        uchar symbol=0;
+ 433   1        uint dec_temper;
+ 434   1        SendData(0x0a); 
+ 435   1        SendData(0x05);
+ 436   1        SendData(0x00);
+ 437   1        SendData(0x0b);
+ 438   1        while(!YYBUSY);
+ 439   1        while(YYBUSY)
+ 440   1        {
+ 441   2          str_time = read_time();   //读取时间    
+ 442   2          show_time_screen();
+ 443   2          /*
+ 444   2          hb_show_time(str_time);   //显示年、月、日、时、分、秒、星期
+ 445   2          read_temper(pbuff);   //读取当前温度值
+ 446   2          temper_convert(); // 启动温度转换，需要750ms
+ 447   2          hb_show_temp(pbuff[0], pbuff[1]);   //显示当前温度
+ 448   2          */
+ 449   2        }
+ 450   1        
+ 451   1        if((pbuff[0] &0x80) != 0)
+ 452   1        {
+ 453   2          symbol = 1;       //符号为负
+ 454   2          pbuff[0] = ~pbuff[0];
+ 455   2          //dec_temper = (0x0F-dec_temper) +1;  //负数取反加1
+ 456   2          pbuff[1]=pbuff[1]&0x0f;
+ 457   2          pbuff[1] = (0x0F-pbuff[1]) +1;
+ 458   2          if(pbuff[1] == 0x10)      //小数部分进位，则整数进位
+ 459   2          {
+ 460   3            pbuff[0] += 1;
+ 461   3            pbuff[1] = 0;
+ 462   3          }
+ 463   2        }
+ 464   1        
+ 465   1        if(symbol==1)//温度零下
+ 466   1        {
+ 467   2            SendData(0x0a); 
+ 468   2            SendData(0x02);
+ 469   2            SendData(0x04);
+ 470   2            SendData(0x0b);
+ 471   2            while(!YYBUSY);
+ 472   2            while(YYBUSY)
+ 473   2            {
+ 474   3              str_time = read_time();   //读取时间  
+ 475   3              show_time_screen();       
+ 476   3              /*
+ 477   3              hb_show_time(str_time);   //显示年、月、日、时、分、秒、星期
+ 478   3              read_temper(pbuff);   //读取当前温度值
+ 479   3              temper_convert(); // 启动温度转换，需要750ms
+ 480   3              hb_show_temp(pbuff[0], pbuff[1]);   //显示当前温度
+ 481   3              */
+ 482   3            }
+ 483   2        }
+ 484   1        
+ 485   1        broadcast(pbuff[0],1);
+ 486   1        
+ 487   1        //汉字点
+ 488   1        SendData(0x0a); 
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 9   
+
+ 489   1        SendData(0x04);
+ 490   1        SendData(0x06);
+ 491   1        SendData(0x0b);
+ 492   1        while(!YYBUSY);
+ 493   1        while(YYBUSY)
+ 494   1        {
+ 495   2          str_time = read_time();   //读取时间  
+ 496   2          show_time_screen();   
+ 497   2          /*
+ 498   2          hb_show_time(str_time);   //显示年、月、日、时、分、秒、星期
+ 499   2          read_temper(pbuff);   //读取当前温度值
+ 500   2          temper_convert(); // 启动温度转换，需要750ms
+ 501   2          hb_show_temp(pbuff[0], pbuff[1]);   //显示当前温度
+ 502   2          */
+ 503   2        }
+ 504   1        
+ 505   1        //温度小数位，只有一位
+ 506   1        
+ 507   1        dec_temper = (uint)pbuff[1];
+ 508   1        dec_temper = dec_temper * 625 + 500;  //对百分位进行四舍五入
+ 509   1        dec_temper = dec_temper/1000;   //只显示1位小数
+ 510   1        pbuff[1]=(uchar)dec_temper;
+ 511   1        broadcast(pbuff[1],1);
+ 512   1        
+ 513   1        //汉字摄氏度
+ 514   1        SendData(0x0a); 
+ 515   1        SendData(0x04);
+ 516   1        SendData(0x07);
+ 517   1        SendData(0x0b);
+ 518   1        while(!YYBUSY);
+ 519   1        while(YYBUSY)
+ 520   1        {
+ 521   2          str_time = read_time();   //读取时间    
+ 522   2          show_time_screen();
+ 523   2          /*
+ 524   2          hb_show_time(str_time);   //显示年、月、日、时、分、秒、星期
+ 525   2          read_temper(pbuff);   //读取当前温度值
+ 526   2          temper_convert(); // 启动温度转换，需要750ms
+ 527   2          hb_show_temp(pbuff[0], pbuff[1]);   //显示当前温度
+ 528   2          */
+ 529   2        }
+ 530   1        
+ 531   1        if(pbuff[0]>=up_temper)//防暑
+ 532   1        {
+ 533   2          SendData(0x0a); 
+ 534   2          SendData(0x04);
+ 535   2          SendData(0x04);
+ 536   2          SendData(0x0b);
+ 537   2          while(!YYBUSY);
+ 538   2          while(YYBUSY)
+ 539   2          {
+ 540   3            str_time = read_time();   //读取时间  
+ 541   3            show_time_screen();     
+ 542   3            /*
+ 543   3            hb_show_time(str_time);   //显示年、月、日、时、分、秒、星期
+ 544   3            read_temper(pbuff);   //读取当前温度值
+ 545   3            temper_convert(); // 启动温度转换，需要750ms
+ 546   3            hb_show_temp(pbuff[0], pbuff[1]);   //显示当前温度
+ 547   3            */
+ 548   3          }
+ 549   2        }
+ 550   1        else if(pbuff[0]<down_temper)//保暖
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 10  
+
+ 551   1        {
+ 552   2          SendData(0x0a);
+ 553   2          SendData(0x04);
+ 554   2          SendData(0x05);
+ 555   2          SendData(0x0b);
+ 556   2          
+ 557   2          while(!YYBUSY);
+ 558   2          while(YYBUSY)
+ 559   2          {
+ 560   3            str_time = read_time();   //读取时间    
+ 561   3            show_time_screen();
+ 562   3            /*
+ 563   3            hb_show_time(str_time);   //显示年、月、日、时、分、秒、星期
+ 564   3            read_temper(pbuff);   //读取当前温度值
+ 565   3            temper_convert(); // 启动温度转换，需要750ms
+ 566   3            hb_show_temp(pbuff[0], pbuff[1]);   //显示当前温度
+ 567   3            */
+ 568   3          }
+ 569   2        }
+ 570   1      }
+ 571          //报时
+ 572          void check_now_time(SYSTEM_TIME str_time)
+ 573          {
+ 574   1          uint tmp_hour;
+ 575   1          uchar shiwei;
+ 576   1          uchar gewei;
+ 577   1          tmp_hour=(uint)str_time.hour;
+ 578   1          shiwei=(uchar)tmp_hour/10;
+ 579   1          gewei=(uchar)tmp_hour%10;
+ 580   1          SendData(0x0a);
+ 581   1          //报时直接发送几点就好
+ 582   1          SendData(shiwei);
+ 583   1          SendData(gewei);
+ 584   1          SendData(0x0b);
+ 585   1          while(!YYBUSY);
+ 586   1          while(YYBUSY)
+ 587   1          {   
+ 588   2            str_time = read_time();   //读取时间  
+ 589   2            show_time_screen();
+ 590   2          }
+ 591   1          
+ 592   1      }
+ 593          void broadcast_morning(SYSTEM_TIME str_time)
+ 594          {
+ 595   1          //早上好,今天是
+ 596   1          SendData(0x0a); 
+ 597   1          SendData(0x04);
+ 598   1          SendData(0x08);
+ 599   1          SendData(0x0b);
+ 600   1          
+ 601   1          while(!YYBUSY);
+ 602   1          while(YYBUSY)
+ 603   1          {
+ 604   2            str_time = read_time();   //读取时间    
+ 605   2            show_time_screen();
+ 606   2          }
+ 607   1          //2
+ 608   1          SendData(0x0a); 
+ 609   1          SendData(0x03);
+ 610   1          SendData(0x02);
+ 611   1          SendData(0x0b);
+ 612   1          while(!YYBUSY);
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 11  
+
+ 613   1          while(YYBUSY)
+ 614   1          {
+ 615   2              str_time = read_time();   //读取时间
+ 616   2              show_time_screen();     
+ 617   2          }
+ 618   1          //0
+ 619   1          SendData(0x0a); 
+ 620   1          SendData(0x03);
+ 621   1          SendData(0x00);
+ 622   1          SendData(0x0b);
+ 623   1          while(!YYBUSY);
+ 624   1          while(YYBUSY)
+ 625   1          {
+ 626   2              str_time = read_time();   //读取时间
+ 627   2              show_time_screen();     
+ 628   2          }
+ 629   1          //几几年 flag=0是10单独报数字
+ 630   1          broadcast(str_time.year,0);
+ 631   1          
+ 632   1        //年
+ 633   1          SendData(0x0a);
+ 634   1          SendData(0x04);
+ 635   1          SendData(0x01);
+ 636   1          SendData(0x0b);
+ 637   1          while(!YYBUSY);
+ 638   1          while(YYBUSY)
+ 639   1          {
+ 640   2              str_time = read_time();   //读取时间
+ 641   2              show_time_screen();     
+ 642   2          }
+ 643   1        //月
+ 644   1          broadcast(str_time.month,1);
+ 645   1          SendData(0x0a); 
+ 646   1          SendData(0x04);
+ 647   1          SendData(0x02);
+ 648   1          SendData(0x0b);
+ 649   1          while(!YYBUSY);
+ 650   1          while(YYBUSY)
+ 651   1          {
+ 652   2              str_time = read_time();   //读取时间
+ 653   2              show_time_screen();     
+ 654   2          }
+ 655   1          broadcast(str_time.date,1);
+ 656   1        //日
+ 657   1          SendData(0x0a);
+ 658   1          SendData(0x04);
+ 659   1          SendData(0x03);
+ 660   1          SendData(0x0b);
+ 661   1          while(!YYBUSY);
+ 662   1          while(YYBUSY)
+ 663   1          {
+ 664   2            str_time = read_time();   //读取时间
+ 665   2            show_time_screen();     
+ 666   2          }
+ 667   1          
+ 668   1        //星期
+ 669   1          SendData(0x0a); 
+ 670   1          SendData(0x04);
+ 671   1          SendData(0x09);
+ 672   1          SendData(0x0b);
+ 673   1          while(!YYBUSY);
+ 674   1          while(YYBUSY)
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 12  
+
+ 675   1          {
+ 676   2            str_time = read_time();   //读取时间
+ 677   2              show_time_screen();     
+ 678   2          }
+ 679   1          //几
+ 680   1          
+ 681   1          if(calculate_day_num(str_time)!=0)
+ 682   1          {
+ 683   2            broadcast(calculate_day_num(str_time),1);
+ 684   2          }
+ 685   1          else
+ 686   1          { 
+ 687   2            SendData(0x0a);
+ 688   2            SendData(0x04);
+ 689   2            SendData(0x03);
+ 690   2            SendData(0x0b);
+ 691   2            while(!YYBUSY);
+ 692   2            while(YYBUSY)
+ 693   2            {
+ 694   3              str_time = read_time();   //读取时间
+ 695   3              show_time_screen();     
+ 696   3            }
+ 697   2          }
+ 698   1          
+ 699   1          //农历
+ 700   1            SendData(0x0a);
+ 701   1            SendData(0x02);
+ 702   1            SendData(0x09);
+ 703   1            SendData(0x0b);
+ 704   1            while(!YYBUSY);
+ 705   1            while(YYBUSY)
+ 706   1            {
+ 707   2              str_time = read_time();   //读取时间
+ 708   2              show_time_screen(); 
+ 709   2            }
+ 710   1            
+ 711   1            
+ 712   1            
+ 713   1          if(leap_month_flag==1)
+ 714   1          {
+ 715   2            SendData(0x0a);
+ 716   2            SendData(0x02);
+ 717   2            SendData(0x08);
+ 718   2            SendData(0x0b);
+ 719   2            while(!YYBUSY);
+ 720   2            while(YYBUSY)
+ 721   2            {
+ 722   3              str_time = read_time();   //读取时间
+ 723   3              show_time_screen(); 
+ 724   3            }
+ 725   2          }
+ 726   1          if(str_time_lunar.month==1)
+ 727   1          {
+ 728   2            SendData(0x0a);
+ 729   2            SendData(0x05);
+ 730   2            SendData(0x04);
+ 731   2            SendData(0x0b);
+ 732   2            while(!YYBUSY);
+ 733   2            while(YYBUSY)
+ 734   2            {
+ 735   3              str_time = read_time();   //读取时间
+ 736   3              show_time_screen(); 
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 13  
+
+ 737   3            }
+ 738   2          }
+ 739   1          else if(str_time_lunar.month==11)
+ 740   1          {
+ 741   2            SendData(0x0a);
+ 742   2            SendData(0x05);
+ 743   2            SendData(0x05);
+ 744   2            SendData(0x0b);
+ 745   2            while(!YYBUSY);
+ 746   2            while(YYBUSY)
+ 747   2            {
+ 748   3              str_time = read_time();   //读取时间
+ 749   3              show_time_screen(); 
+ 750   3            }
+ 751   2          }
+ 752   1          else if(str_time_lunar.month==12)
+ 753   1          {
+ 754   2            SendData(0x0a);
+ 755   2            SendData(0x05);
+ 756   2            SendData(0x06);
+ 757   2            SendData(0x0b);
+ 758   2            while(!YYBUSY);
+ 759   2            while(YYBUSY)
+ 760   2            {
+ 761   3              str_time = read_time();   //读取时间
+ 762   3              show_time_screen(); 
+ 763   3            }
+ 764   2          }
+ 765   1          else if(str_time_lunar.month==10)
+ 766   1          {
+ 767   2            SendData(0x0a);
+ 768   2            SendData(0x04);
+ 769   2            SendData(0x00);
+ 770   2            SendData(0x0b);
+ 771   2            while(!YYBUSY);
+ 772   2            while(YYBUSY)
+ 773   2            {
+ 774   3              str_time = read_time();   //读取时间
+ 775   3              show_time_screen(); 
+ 776   3            }
+ 777   2          }
+ 778   1          else
+ 779   1          {
+ 780   2            SendData(0x0a);
+ 781   2            SendData(0x03);
+ 782   2            SendData(str_time_lunar.month);
+ 783   2            SendData(0x0b);
+ 784   2            while(!YYBUSY);
+ 785   2            while(YYBUSY)
+ 786   2            {
+ 787   3              str_time = read_time(); //读取时间
+ 788   3              show_time_screen(); 
+ 789   3            }
+ 790   2          }
+ 791   1          //月
+ 792   1            SendData(0x0a);
+ 793   1            SendData(0x04);
+ 794   1            SendData(0x02);
+ 795   1            SendData(0x0b);
+ 796   1            while(!YYBUSY);
+ 797   1            while(YYBUSY)
+ 798   1            {
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 14  
+
+ 799   2              str_time = read_time(); //读取时间
+ 800   2              show_time_screen(); 
+ 801   2            }
+ 802   1            
+ 803   1            if(str_time_lunar.date<=10)
+ 804   1            {
+ 805   2              //初
+ 806   2              SendData(0x0a);
+ 807   2              SendData(0x02);
+ 808   2              SendData(0x07);
+ 809   2              SendData(0x0b);
+ 810   2              while(!YYBUSY);
+ 811   2              while(YYBUSY)
+ 812   2              {
+ 813   3                str_time = read_time(); //读取时间
+ 814   3                show_time_screen(); 
+ 815   3              }       
+ 816   2              
+ 817   2              if(str_time_lunar.date==10)
+ 818   2              {
+ 819   3                SendData(0x0a);
+ 820   3                SendData(0x04);
+ 821   3                SendData(0x00);
+ 822   3                SendData(0x0b);
+ 823   3                while(!YYBUSY);
+ 824   3                while(YYBUSY)
+ 825   3                {
+ 826   4                  str_time = read_time(); //读取时间
+ 827   4                  show_time_screen(); 
+ 828   4                }   
+ 829   3              }
+ 830   2              else{
+ 831   3                SendData(0x0a);
+ 832   3                SendData(0x03);
+ 833   3                SendData(str_time_lunar.date);
+ 834   3                SendData(0x0b);
+ 835   3                while(!YYBUSY);
+ 836   3                while(YYBUSY)
+ 837   3                {
+ 838   4                  str_time = read_time(); //读取时间
+ 839   4                  show_time_screen(); 
+ 840   4                } 
+ 841   3              }
+ 842   2            }
+ 843   1          else
+ 844   1          {
+ 845   2            broadcast(str_time_lunar.date,1);
+ 846   2          }
+ 847   1          check_now_time(str_time);
+ 848   1          
+ 849   1          if(festival_num!=0)
+ 850   1          {
+ 851   2            SendData(0x0a);
+ 852   2            SendData(0x06);
+ 853   2            SendData(0x01);
+ 854   2            SendData(0x0b);
+ 855   2            while(!YYBUSY);
+ 856   2            while(YYBUSY)
+ 857   2            {
+ 858   3              str_time = read_time(); //读取时间
+ 859   3              show_time_screen(); 
+ 860   3            }
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 15  
+
+ 861   2            switch(festival_num)
+ 862   2            {
+ 863   3              case 1:
+ 864   3                SendData(0x0a);
+ 865   3                SendData(0x06);
+ 866   3                SendData(0x02);
+ 867   3                SendData(0x0b);while(!YYBUSY);
+ 868   3            while(YYBUSY)
+ 869   3            {
+ 870   4              str_time = read_time(); //读取时间
+ 871   4              show_time_screen(); 
+ 872   4            }
+ 873   3                break;
+ 874   3              case 2:
+ 875   3                SendData(0x0a);
+ 876   3                SendData(0x06);
+ 877   3                SendData(0x03);
+ 878   3                SendData(0x0b);while(!YYBUSY);
+ 879   3            while(YYBUSY)
+ 880   3            {
+ 881   4              str_time = read_time(); //读取时间
+ 882   4              show_time_screen(); 
+ 883   4            }
+ 884   3                break;
+ 885   3              case 3:
+ 886   3                SendData(0x0a);
+ 887   3                SendData(0x06);
+ 888   3                SendData(0x04);
+ 889   3                SendData(0x0b);while(!YYBUSY);
+ 890   3            while(YYBUSY)
+ 891   3            {
+ 892   4              str_time = read_time(); //读取时间
+ 893   4              show_time_screen(); 
+ 894   4            }
+ 895   3                break;
+ 896   3              case 4:
+ 897   3                SendData(0x0a);
+ 898   3                SendData(0x06);
+ 899   3                SendData(0x05);
+ 900   3                SendData(0x0b);while(!YYBUSY);
+ 901   3            while(YYBUSY)
+ 902   3            {
+ 903   4              str_time = read_time(); //读取时间
+ 904   4              show_time_screen(); 
+ 905   4            }
+ 906   3                break;
+ 907   3              case 5:
+ 908   3                SendData(0x0a);
+ 909   3                SendData(0x06);
+ 910   3                SendData(0x06);
+ 911   3                SendData(0x0b);while(!YYBUSY);
+ 912   3            while(YYBUSY)
+ 913   3            {
+ 914   4              str_time = read_time(); //读取时间
+ 915   4              show_time_screen(); 
+ 916   4            }
+ 917   3                break;
+ 918   3              case 6:
+ 919   3                SendData(0x0a);
+ 920   3                SendData(0x06);
+ 921   3                SendData(0x07);
+ 922   3                SendData(0x0b);while(!YYBUSY);
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 16  
+
+ 923   3            while(YYBUSY)
+ 924   3            {
+ 925   4              str_time = read_time(); //读取时间
+ 926   4              show_time_screen(); 
+ 927   4            }
+ 928   3                break;
+ 929   3              case 7:
+ 930   3                SendData(0x0a);
+ 931   3                SendData(0x06);
+ 932   3                SendData(0x08);
+ 933   3                SendData(0x0b);while(!YYBUSY);
+ 934   3            while(YYBUSY)
+ 935   3            {
+ 936   4              str_time = read_time(); //读取时间
+ 937   4              show_time_screen(); 
+ 938   4            }
+ 939   3                break;
+ 940   3              case 8:
+ 941   3                SendData(0x0a);
+ 942   3                SendData(0x06);
+ 943   3                SendData(0x09);
+ 944   3                SendData(0x0b);while(!YYBUSY);
+ 945   3            while(YYBUSY)
+ 946   3            {
+ 947   4              str_time = read_time(); //读取时间
+ 948   4              show_time_screen(); 
+ 949   4            }
+ 950   3                break;
+ 951   3              case 9:
+ 952   3                SendData(0x0a);
+ 953   3                SendData(0x07);
+ 954   3                SendData(0x00);
+ 955   3                SendData(0x0b);while(!YYBUSY);
+ 956   3            while(YYBUSY)
+ 957   3            {
+ 958   4              str_time = read_time(); //读取时间
+ 959   4              show_time_screen(); 
+ 960   4            }
+ 961   3                break;
+ 962   3              case 10:
+ 963   3                SendData(0x0a);
+ 964   3                SendData(0x07);
+ 965   3                SendData(0x01);
+ 966   3                SendData(0x0b);while(!YYBUSY);
+ 967   3            while(YYBUSY)
+ 968   3            {
+ 969   4              str_time = read_time(); //读取时间
+ 970   4              show_time_screen(); 
+ 971   4            }
+ 972   3                break;
+ 973   3              case 11:
+ 974   3                SendData(0x0a);
+ 975   3                SendData(0x07);
+ 976   3                SendData(0x02);
+ 977   3                SendData(0x0b);while(!YYBUSY);
+ 978   3            while(YYBUSY)
+ 979   3            {
+ 980   4              str_time = read_time(); //读取时间
+ 981   4              show_time_screen(); 
+ 982   4            }
+ 983   3                break;
+ 984   3              case 12:
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 17  
+
+ 985   3                SendData(0x0a);
+ 986   3                SendData(0x07);
+ 987   3                SendData(0x03);
+ 988   3                SendData(0x0b);while(!YYBUSY);
+ 989   3            while(YYBUSY)
+ 990   3            {
+ 991   4              str_time = read_time(); //读取时间
+ 992   4              show_time_screen(); 
+ 993   4            }
+ 994   3                break;
+ 995   3              case 13:
+ 996   3                SendData(0x0a);
+ 997   3                SendData(0x07);
+ 998   3                SendData(0x04);
+ 999   3                SendData(0x0b);while(!YYBUSY);
+1000   3            while(YYBUSY)
+1001   3            {
+1002   4              str_time = read_time(); //读取时间
+1003   4              show_time_screen(); 
+1004   4            }
+1005   3                break;
+1006   3              case 14:
+1007   3                SendData(0x0a);
+1008   3                SendData(0x07);
+1009   3                SendData(0x05);
+1010   3                SendData(0x0b);while(!YYBUSY);
+1011   3            while(YYBUSY)
+1012   3            {
+1013   4              str_time = read_time(); //读取时间
+1014   4              show_time_screen(); 
+1015   4            }
+1016   3                break;
+1017   3              case 15:
+1018   3                SendData(0x0a);
+1019   3                SendData(0x07);
+1020   3                SendData(0x06);
+1021   3                SendData(0x0b);while(!YYBUSY);
+1022   3            while(YYBUSY)
+1023   3            {
+1024   4              str_time = read_time(); //读取时间
+1025   4              show_time_screen(); 
+1026   4            }
+1027   3                break;
+1028   3              case 16:
+1029   3                SendData(0x0a);
+1030   3                SendData(0x07);
+1031   3                SendData(0x07);
+1032   3                SendData(0x0b);while(!YYBUSY);
+1033   3            while(YYBUSY)
+1034   3            {
+1035   4              str_time = read_time(); //读取时间
+1036   4              show_time_screen(); 
+1037   4            }
+1038   3                break;
+1039   3              case 17:
+1040   3                SendData(0x0a);
+1041   3                SendData(0x07);
+1042   3                SendData(0x08);
+1043   3                SendData(0x0b);while(!YYBUSY);
+1044   3            while(YYBUSY)
+1045   3            {
+1046   4              str_time = read_time(); //读取时间
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 18  
+
+1047   4              show_time_screen(); 
+1048   4            }
+1049   3                break;
+1050   3              case 18:
+1051   3                SendData(0x0a);
+1052   3                SendData(0x07);
+1053   3                SendData(0x09);
+1054   3                SendData(0x0b);while(!YYBUSY);
+1055   3            while(YYBUSY)
+1056   3            {
+1057   4              str_time = read_time(); //读取时间
+1058   4              show_time_screen(); 
+1059   4            }
+1060   3                break;
+1061   3              case 19:
+1062   3                SendData(0x0a);
+1063   3                SendData(0x08);
+1064   3                SendData(0x00);
+1065   3                SendData(0x0b);while(!YYBUSY);
+1066   3            while(YYBUSY)
+1067   3            {
+1068   4              str_time = read_time(); //读取时间
+1069   4              show_time_screen(); 
+1070   4            }
+1071   3                break;
+1072   3              case 20:
+1073   3                SendData(0x0a);
+1074   3                SendData(0x08);
+1075   3                SendData(0x01);
+1076   3                SendData(0x0b);while(!YYBUSY);
+1077   3            while(YYBUSY)
+1078   3            {
+1079   4              str_time = read_time(); //读取时间
+1080   4              show_time_screen(); 
+1081   4            }
+1082   3                break;
+1083   3              case 21:
+1084   3                SendData(0x0a);
+1085   3                SendData(0x08);
+1086   3                SendData(0x02);
+1087   3                SendData(0x0b);while(!YYBUSY);
+1088   3            while(YYBUSY)
+1089   3            {
+1090   4              str_time = read_time(); //读取时间
+1091   4              show_time_screen(); 
+1092   4            }
+1093   3                break;
+1094   3              case 22:
+1095   3                SendData(0x0a);
+1096   3                SendData(0x08);
+1097   3                SendData(0x03);
+1098   3                SendData(0x0b);while(!YYBUSY);
+1099   3            while(YYBUSY)
+1100   3            {
+1101   4              str_time = read_time(); //读取时间
+1102   4              show_time_screen(); 
+1103   4            }
+1104   3                break;
+1105   3              case 23:
+1106   3                SendData(0x0a);
+1107   3                SendData(0x08);
+1108   3                SendData(0x04);
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 19  
+
+1109   3                SendData(0x0b);while(!YYBUSY);
+1110   3            while(YYBUSY)
+1111   3            {
+1112   4              str_time = read_time(); //读取时间
+1113   4              show_time_screen(); 
+1114   4            }
+1115   3                break;
+1116   3              case 24:
+1117   3                SendData(0x0a);
+1118   3                SendData(0x08);
+1119   3                SendData(0x05);
+1120   3                SendData(0x0b);while(!YYBUSY);
+1121   3            while(YYBUSY)
+1122   3            {
+1123   4              str_time = read_time(); //读取时间
+1124   4              show_time_screen(); 
+1125   4            }
+1126   3                break;
+1127   3              case 25:
+1128   3                SendData(0x0a);
+1129   3                SendData(0x08);
+1130   3                SendData(0x06);
+1131   3                SendData(0x0b);while(!YYBUSY);
+1132   3            while(YYBUSY)
+1133   3            {
+1134   4              str_time = read_time(); //读取时间
+1135   4              show_time_screen(); 
+1136   4            }
+1137   3                break;
+1138   3              case 26:
+1139   3                SendData(0x0a);
+1140   3                SendData(0x08);
+1141   3                SendData(0x07);
+1142   3                SendData(0x0b);while(!YYBUSY);
+1143   3            while(YYBUSY)
+1144   3            {
+1145   4              str_time = read_time(); //读取时间
+1146   4              show_time_screen(); 
+1147   4            }
+1148   3                break;
+1149   3              case 27:
+1150   3                SendData(0x0a);
+1151   3                SendData(0x08);
+1152   3                SendData(0x08);
+1153   3                SendData(0x0b);while(!YYBUSY);
+1154   3            while(YYBUSY)
+1155   3            {
+1156   4              str_time = read_time(); //读取时间
+1157   4              show_time_screen(); 
+1158   4            }
+1159   3                break;
+1160   3              case 28:
+1161   3                SendData(0x0a);
+1162   3                SendData(0x08);
+1163   3                SendData(0x09);
+1164   3                SendData(0x0b);while(!YYBUSY);
+1165   3            while(YYBUSY)
+1166   3            {
+1167   4              str_time = read_time(); //读取时间
+1168   4              show_time_screen(); 
+1169   4            }
+1170   3                break;
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 20  
+
+1171   3              case 29:
+1172   3                SendData(0x0a);
+1173   3                SendData(0x09);
+1174   3                SendData(0x00);
+1175   3                SendData(0x0b);while(!YYBUSY);
+1176   3            while(YYBUSY)
+1177   3            {
+1178   4              str_time = read_time(); //读取时间
+1179   4              show_time_screen(); 
+1180   4            }
+1181   3                break;
+1182   3              case 30:
+1183   3                SendData(0x0a);
+1184   3                SendData(0x09);
+1185   3                SendData(0x01);
+1186   3                SendData(0x0b);while(!YYBUSY);
+1187   3            while(YYBUSY)
+1188   3            {
+1189   4              str_time = read_time(); //读取时间
+1190   4              show_time_screen(); 
+1191   4            }
+1192   3                break;
+1193   3              case 31:
+1194   3                SendData(0x0a);
+1195   3                SendData(0x09);
+1196   3                SendData(0x02);
+1197   3                SendData(0x0b);while(!YYBUSY);
+1198   3            while(YYBUSY)
+1199   3            {
+1200   4              str_time = read_time(); //读取时间
+1201   4              show_time_screen(); 
+1202   4            }
+1203   3                break;
+1204   3              case 32:
+1205   3                SendData(0x0a);
+1206   3                SendData(0x09);
+1207   3                SendData(0x03);
+1208   3                SendData(0x0b);while(!YYBUSY);
+1209   3            while(YYBUSY)
+1210   3            {
+1211   4              str_time = read_time(); //读取时间
+1212   4              show_time_screen(); 
+1213   4            }
+1214   3                break;
+1215   3              case 33:
+1216   3                SendData(0x0a);
+1217   3                SendData(0x09);
+1218   3                SendData(0x04);
+1219   3                SendData(0x0b);while(!YYBUSY);
+1220   3            while(YYBUSY)
+1221   3            {
+1222   4              str_time = read_time(); //读取时间
+1223   4              show_time_screen(); 
+1224   4            }
+1225   3                break;
+1226   3              case 34:
+1227   3                SendData(0x0a);
+1228   3                SendData(0x09);
+1229   3                SendData(0x05);
+1230   3                SendData(0x0b);while(!YYBUSY);
+1231   3            while(YYBUSY)
+1232   3            {
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 21  
+
+1233   4              str_time = read_time(); //读取时间
+1234   4              show_time_screen(); 
+1235   4            }
+1236   3                break;
+1237   3              case 35:
+1238   3                SendData(0x0a);
+1239   3                SendData(0x09);
+1240   3                SendData(0x06);
+1241   3                SendData(0x0b);while(!YYBUSY);
+1242   3            while(YYBUSY)
+1243   3            {
+1244   4              str_time = read_time(); //读取时间
+1245   4              show_time_screen(); 
+1246   4            }
+1247   3                break;
+1248   3              case 36:
+1249   3                SendData(0x0a);
+1250   3                SendData(0x09);
+1251   3                SendData(0x07);
+1252   3                SendData(0x0b);while(!YYBUSY);
+1253   3            while(YYBUSY)
+1254   3            {
+1255   4              str_time = read_time(); //读取时间
+1256   4              show_time_screen(); 
+1257   4            }
+1258   3                break;
+1259   3              case 37:
+1260   3                SendData(0x0a);
+1261   3                SendData(0x09);
+1262   3                SendData(0x08);
+1263   3                SendData(0x0b);while(!YYBUSY);
+1264   3            while(YYBUSY)
+1265   3            {
+1266   4              str_time = read_time(); //读取时间
+1267   4              show_time_screen(); 
+1268   4            }
+1269   3                break;
+1270   3              case 38:
+1271   3                SendData(0x0a);
+1272   3                SendData(0x09);
+1273   3                SendData(0x09);
+1274   3                SendData(0x0b);while(!YYBUSY);
+1275   3            while(YYBUSY)
+1276   3            {
+1277   4              str_time = read_time(); //读取时间
+1278   4              show_time_screen(); 
+1279   4            }
+1280   3                break;
+1281   3              case 39:
+1282   3                SendData(0x0a);
+1283   3                SendData(0x01);
+1284   3                SendData(0x00);
+1285   3                SendData(0x00);
+1286   3                SendData(0x0b);while(!YYBUSY);
+1287   3            while(YYBUSY)
+1288   3            {
+1289   4              str_time = read_time(); //读取时间
+1290   4              show_time_screen(); 
+1291   4            }
+1292   3                break;
+1293   3              case 40:
+1294   3                SendData(0x0a);
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 22  
+
+1295   3                SendData(0x01);
+1296   3                SendData(0x00);
+1297   3                SendData(0x01);
+1298   3                SendData(0x0b);while(!YYBUSY);
+1299   3            while(YYBUSY)
+1300   3            {
+1301   4              str_time = read_time(); //读取时间
+1302   4              show_time_screen(); 
+1303   4            }
+1304   3                break;
+1305   3              case 41:
+1306   3                SendData(0x0a);
+1307   3                SendData(0x01);
+1308   3                SendData(0x00);
+1309   3                SendData(0x02);
+1310   3                SendData(0x0b);while(!YYBUSY);
+1311   3            while(YYBUSY)
+1312   3            {
+1313   4              str_time = read_time(); //读取时间
+1314   4              show_time_screen(); 
+1315   4            }
+1316   3                break;
+1317   3              case 42:
+1318   3                SendData(0x0a);
+1319   3                SendData(0x01);
+1320   3                SendData(0x00);
+1321   3                SendData(0x03);
+1322   3                SendData(0x0b);while(!YYBUSY);
+1323   3            while(YYBUSY)
+1324   3            {
+1325   4              str_time = read_time(); //读取时间
+1326   4              show_time_screen(); 
+1327   4            }
+1328   3                break;
+1329   3              case 43:
+1330   3                SendData(0x0a);
+1331   3                SendData(0x01);
+1332   3                SendData(0x00);
+1333   3                SendData(0x04);
+1334   3                SendData(0x0b);while(!YYBUSY);
+1335   3            while(YYBUSY)
+1336   3            {
+1337   4              str_time = read_time(); //读取时间
+1338   4              show_time_screen(); 
+1339   4            }
+1340   3                break;
+1341   3              case 44:
+1342   3                SendData(0x0a);
+1343   3                SendData(0x01);
+1344   3                SendData(0x00);
+1345   3                SendData(0x05);
+1346   3                SendData(0x0b);while(!YYBUSY);
+1347   3            while(YYBUSY)
+1348   3            {
+1349   4              str_time = read_time(); //读取时间
+1350   4              show_time_screen(); 
+1351   4            }
+1352   3                break;
+1353   3              case 45:
+1354   3                SendData(0x0a);
+1355   3                SendData(0x01);
+1356   3                SendData(0x00);
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 23  
+
+1357   3                SendData(0x06);
+1358   3                SendData(0x0b);while(!YYBUSY);
+1359   3            while(YYBUSY)
+1360   3            {
+1361   4              str_time = read_time(); //读取时间
+1362   4              show_time_screen(); 
+1363   4            }
+1364   3                break;
+1365   3              case 46:
+1366   3                SendData(0x0a);
+1367   3                SendData(0x01);
+1368   3                SendData(0x00);
+1369   3                SendData(0x07);
+1370   3                SendData(0x0b);while(!YYBUSY);
+1371   3            while(YYBUSY)
+1372   3            {
+1373   4              str_time = read_time(); //读取时间
+1374   4              show_time_screen(); 
+1375   4            }
+1376   3                break;
+1377   3              case 47:
+1378   3                SendData(0x0a);
+1379   3                SendData(0x01);
+1380   3                SendData(0x00);
+1381   3                SendData(0x08);
+1382   3                SendData(0x0b);while(!YYBUSY);
+1383   3            while(YYBUSY)
+1384   3            {
+1385   4              str_time = read_time(); //读取时间
+1386   4              show_time_screen(); 
+1387   4            }
+1388   3                break;
+1389   3              case 48:
+1390   3                SendData(0x0a);
+1391   3                SendData(0x01);
+1392   3                SendData(0x00);
+1393   3                SendData(0x09);
+1394   3                SendData(0x0b);while(!YYBUSY);
+1395   3            while(YYBUSY)
+1396   3            {
+1397   4              str_time = read_time(); //读取时间
+1398   4              show_time_screen(); 
+1399   4            }
+1400   3                break;
+1401   3              case 49:
+1402   3                SendData(0x0a);
+1403   3                SendData(0x01);
+1404   3                SendData(0x01);
+1405   3                SendData(0x00);
+1406   3                SendData(0x0b);while(!YYBUSY);
+1407   3            while(YYBUSY)
+1408   3            {
+1409   4              str_time = read_time(); //读取时间
+1410   4              show_time_screen(); 
+1411   4            }
+1412   3                break;
+1413   3              case 50:
+1414   3                SendData(0x0a);
+1415   3                SendData(0x01);
+1416   3                SendData(0x01);
+1417   3                SendData(0x01);
+1418   3                SendData(0x0b);while(!YYBUSY);
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 24  
+
+1419   3            while(YYBUSY)
+1420   3            {
+1421   4              str_time = read_time(); //读取时间
+1422   4              show_time_screen(); 
+1423   4            }
+1424   3                break;
+1425   3              case 51:
+1426   3                SendData(0x0a);
+1427   3                SendData(0x01);
+1428   3                SendData(0x01);
+1429   3                SendData(0x02);
+1430   3                SendData(0x0b);while(!YYBUSY);
+1431   3            while(YYBUSY)
+1432   3            {
+1433   4              str_time = read_time(); //读取时间
+1434   4              show_time_screen(); 
+1435   4            }
+1436   3                break;
+1437   3              case 52:
+1438   3                SendData(0x0a);
+1439   3                SendData(0x01);
+1440   3                SendData(0x01);
+1441   3                SendData(0x03);
+1442   3                SendData(0x0b);while(!YYBUSY);
+1443   3            while(YYBUSY)
+1444   3            {
+1445   4              str_time = read_time(); //读取时间
+1446   4              show_time_screen(); 
+1447   4            }
+1448   3                break;
+1449   3              case 53:
+1450   3                SendData(0x0a);
+1451   3                SendData(0x01);
+1452   3                SendData(0x01);
+1453   3                SendData(0x04);
+1454   3                SendData(0x0b);while(!YYBUSY);
+1455   3            while(YYBUSY)
+1456   3            {
+1457   4              str_time = read_time(); //读取时间
+1458   4              show_time_screen(); 
+1459   4            }
+1460   3                break;
+1461   3              case 54:
+1462   3                SendData(0x0a);
+1463   3                SendData(0x01);
+1464   3                SendData(0x01);
+1465   3                SendData(0x05);
+1466   3                SendData(0x0b);while(!YYBUSY);
+1467   3            while(YYBUSY)
+1468   3            {
+1469   4              str_time = read_time(); //读取时间
+1470   4              show_time_screen(); 
+1471   4            }
+1472   3                break;
+1473   3              case 55:
+1474   3                SendData(0x0a);
+1475   3                SendData(0x01);
+1476   3                SendData(0x01);
+1477   3                SendData(0x06);
+1478   3                SendData(0x0b);while(!YYBUSY);
+1479   3            while(YYBUSY)
+1480   3            {
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 25  
+
+1481   4              str_time = read_time(); //读取时间
+1482   4              show_time_screen(); 
+1483   4            }
+1484   3                break;
+1485   3              case 56:
+1486   3                SendData(0x0a);
+1487   3                SendData(0x01);
+1488   3                SendData(0x01);
+1489   3                SendData(0x07);
+1490   3                SendData(0x0b);while(!YYBUSY);
+1491   3            while(YYBUSY)
+1492   3            {
+1493   4              str_time = read_time(); //读取时间
+1494   4              show_time_screen(); 
+1495   4            }
+1496   3                break;
+1497   3              case 57:
+1498   3                SendData(0x0a);
+1499   3                SendData(0x01);
+1500   3                SendData(0x01);
+1501   3                SendData(0x08);
+1502   3                SendData(0x0b);while(!YYBUSY);
+1503   3            while(YYBUSY)
+1504   3            {
+1505   4              str_time = read_time(); //读取时间
+1506   4              show_time_screen(); 
+1507   4            }
+1508   3                break;
+1509   3              case 58:
+1510   3                SendData(0x0a);
+1511   3                SendData(0x01);
+1512   3                SendData(0x01);
+1513   3                SendData(0x09);
+1514   3                SendData(0x0b);while(!YYBUSY);
+1515   3            while(YYBUSY)
+1516   3            {
+1517   4              str_time = read_time(); //读取时间
+1518   4              show_time_screen(); 
+1519   4            }
+1520   3                break;
+1521   3              case 59:
+1522   3                SendData(0x0a);
+1523   3                SendData(0x01);
+1524   3                SendData(0x02);
+1525   3                SendData(0x00);
+1526   3                SendData(0x0b);while(!YYBUSY);
+1527   3            while(YYBUSY)
+1528   3            {
+1529   4              str_time = read_time(); //读取时间
+1530   4              show_time_screen(); 
+1531   4            }
+1532   3                break;
+1533   3              case 60:
+1534   3                SendData(0x0a);
+1535   3                SendData(0x01);
+1536   3                SendData(0x02);
+1537   3                SendData(0x01);
+1538   3                SendData(0x0b);while(!YYBUSY);
+1539   3            while(YYBUSY)
+1540   3            {
+1541   4              str_time = read_time(); //读取时间
+1542   4              show_time_screen(); 
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 26  
+
+1543   4            }
+1544   3                break;
+1545   3              case 61:
+1546   3                SendData(0x0a);
+1547   3                SendData(0x01);
+1548   3                SendData(0x02);
+1549   3                SendData(0x02);
+1550   3                SendData(0x0b);while(!YYBUSY);
+1551   3            while(YYBUSY)
+1552   3            {
+1553   4              str_time = read_time(); //读取时间
+1554   4              show_time_screen(); 
+1555   4            }
+1556   3                break;
+1557   3              case 62:
+1558   3                SendData(0x0a);
+1559   3                SendData(0x01);
+1560   3                SendData(0x02);
+1561   3                SendData(0x03);
+1562   3                SendData(0x0b);while(!YYBUSY);
+1563   3            while(YYBUSY)
+1564   3            {
+1565   4              str_time = read_time(); //读取时间
+1566   4              show_time_screen(); 
+1567   4            }
+1568   3                break;
+1569   3              case 63:
+1570   3                SendData(0x0a);
+1571   3                SendData(0x01);
+1572   3                SendData(0x02);
+1573   3                SendData(0x04);
+1574   3                SendData(0x0b);while(!YYBUSY);
+1575   3            while(YYBUSY)
+1576   3            {
+1577   4              str_time = read_time(); //读取时间
+1578   4              show_time_screen(); 
+1579   4            }
+1580   3                break;
+1581   3              case 64:
+1582   3                SendData(0x0a);
+1583   3                SendData(0x01);
+1584   3                SendData(0x02);
+1585   3                SendData(0x05);
+1586   3                SendData(0x0b);while(!YYBUSY);
+1587   3            while(YYBUSY)
+1588   3            {
+1589   4              str_time = read_time(); //读取时间
+1590   4              show_time_screen(); 
+1591   4            }
+1592   3                break;
+1593   3              case 65:
+1594   3                SendData(0x0a);
+1595   3                SendData(0x01);
+1596   3                SendData(0x02);
+1597   3                SendData(0x06);
+1598   3                SendData(0x0b);while(!YYBUSY);
+1599   3            while(YYBUSY)
+1600   3            {
+1601   4              str_time = read_time(); //读取时间
+1602   4              show_time_screen(); 
+1603   4            }
+1604   3                break;
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 27  
+
+1605   3              case 66:
+1606   3                SendData(0x0a);
+1607   3                SendData(0x01);
+1608   3                SendData(0x02);
+1609   3                SendData(0x07);
+1610   3                SendData(0x0b);while(!YYBUSY);
+1611   3            while(YYBUSY)
+1612   3            {
+1613   4              str_time = read_time(); //读取时间
+1614   4              show_time_screen(); 
+1615   4            }
+1616   3                break;
+1617   3              case 67:
+1618   3                SendData(0x0a);
+1619   3                SendData(0x01);
+1620   3                SendData(0x02);
+1621   3                SendData(0x08);
+1622   3                SendData(0x0b);while(!YYBUSY);
+1623   3            while(YYBUSY)
+1624   3            {
+1625   4              str_time = read_time(); //读取时间
+1626   4              show_time_screen(); 
+1627   4            }
+1628   3                break;
+1629   3              case 68:
+1630   3                SendData(0x0a);
+1631   3                SendData(0x01);
+1632   3                SendData(0x02);
+1633   3                SendData(0x09);
+1634   3                SendData(0x0b);while(!YYBUSY);
+1635   3            while(YYBUSY)
+1636   3            {
+1637   4              str_time = read_time(); //读取时间
+1638   4              show_time_screen(); 
+1639   4            }
+1640   3                break;
+1641   3              case 69:
+1642   3                SendData(0x0a);
+1643   3                SendData(0x01);
+1644   3                SendData(0x03);
+1645   3                SendData(0x00);
+1646   3                SendData(0x0b);while(!YYBUSY);
+1647   3            while(YYBUSY)
+1648   3            {
+1649   4              str_time = read_time(); //读取时间
+1650   4              show_time_screen(); 
+1651   4            }
+1652   3                break;
+1653   3              case 70:
+1654   3                SendData(0x0a);
+1655   3                SendData(0x01);
+1656   3                SendData(0x03);
+1657   3                SendData(0x01);
+1658   3                SendData(0x0b);while(!YYBUSY);
+1659   3            while(YYBUSY)
+1660   3            {
+1661   4              str_time = read_time(); //读取时间
+1662   4              show_time_screen(); 
+1663   4            }
+1664   3                break;
+1665   3            }
+1666   2      
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 28  
+
+1667   2          }
+1668   1          
+1669   1          
+1670   1      }
+1671          
+1672          void welcome_music(uchar volume_start)
+1673          {
+1674   1      
+1675   1            SendData(0x0a);
+1676   1            SendData(volume_start);
+1677   1            SendData(0x00);
+1678   1            SendData(0x0c);
+1679   1        
+1680   1            SendData(0x0a);
+1681   1            SendData(0x02);
+1682   1            SendData(0x06);
+1683   1            SendData(0x0b);
+1684   1            while(!YYBUSY);
+1685   1            while(YYBUSY)
+1686   1            {
+1687   2              welcome_init();
+1688   2            }
+1689   1      }
+1690          void check_alarm_time(SYSTEM_TIME str_time,
+1691                                  SYSTEM_TIME str_time_alarm[2],
+1692                                  uchar alarm_show_flag[2][7])
+1693          {
+1694   1        uint tmp_year,tmp_month,tmp_date;
+1695   1        uint iWeekDay = 10;
+1696   1        tmp_year=(uint)str_time.year;
+1697   1        tmp_month=(uint)str_time.month;
+1698   1        tmp_date=(uint)str_time.date;
+1699   1        
+1700   1         if (1 == tmp_month || 2 == tmp_month)
+1701   1          {
+1702   2              tmp_month += 12;
+1703   2              tmp_year--;
+1704   2          }
+1705   1          iWeekDay = (tmp_date + 1 + 2 * tmp_month + 3 * (tmp_month + 1) / 5 +
+1706   1                      tmp_year + tmp_year / 4 - tmp_year / 100 + tmp_year / 400) % 7;
+1707   1          //以上函数是计算日期对应的星期 iWeekDay:0-sun;1-mon
+1708   1          
+1709   1          //设置音量
+1710   1          SendData(0x0a);
+1711   1          SendData(volume);
+1712   1          SendData(0x00);
+1713   1          SendData(0x0c);
+1714   1          for(i_alarm=0;i_alarm<2;i_alarm++)
+1715   1          {
+1716   2                if(str_time.hour==str_time_alarm[i_alarm].hour &&
+1717   2                    str_time.min==str_time_alarm[i_alarm].min &&
+1718   2                    str_time.sec==str_time_alarm[i_alarm].sec &&
+1719   2                    alarm_show_flag[i_alarm][iWeekDay] || music_play_time!=0)
+1720   2                {
+1721   3                  SendData(0x0a);
+1722   3                  SendData(0x05);
+1723   3                  SendData(MUSIC_YY_ADDR+music_num-0x01);//从设定的音乐开始放
+1724   3                  SendData(0x0b);//闹钟响
+1725   3                  music_play_time+=1;
+1726   3                  while(!YYBUSY);
+1727   3                  while(YYBUSY)
+1728   3                  {
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 29  
+
+1729   4                    str_time = read_time();   //读取时间    
+1730   4                    if(music_play_time!=0)
+1731   4                    {
+1732   5                      if(music_play_time==3)
+1733   5                      {
+1734   6                        music_play_time=0;
+1735   6                      }
+1736   5                    }
+1737   4                    show_time_screen();
+1738   4                    //i_alarm=0;//保证下次检测闹钟功能正常
+1739   4                    if(SWITCH==0 || ADD==0 || SUB==0 || 
+1740   4                        ALARM==0 || CHOOSE_MUSIC ==0 || VOLUME==0)
+1741   4                    {
+1742   5                      delay_ms(90);
+1743   5                      if(SWITCH==0 || ADD==0 || SUB==0 || 
+1744   5                        ALARM==0 || CHOOSE_MUSIC ==0 || VOLUME==0 )
+1745   5                      {
+1746   6                        //停止播放
+1747   6                        SendData(0x0a);
+1748   6                        SendData(0x05);
+1749   6                        SendData(MUSIC_YY_ADDR+music_num-0x01);
+1750   6                        SendData(0x12);
+1751   6                        music_play_time=0;
+1752   6                        if(wakeup_late!=0)
+1753   6                        {
+1754   7                          //str_time_alarm[i_alarm]=str_time_alarm_flag[i_alarm];
+1755   7                          if(str_time_alarm[i_alarm].min<wakeup_late*5)
+1756   7                          {
+1757   8                            str_time_alarm[i_alarm].min=str_time_alarm[i_alarm].min-wakeup_late*5+60;
+1758   8                            //str_time_alarm[i_alarm].hour=23;
+1759   8                            if(str_time_alarm[i_alarm].hour!=0)
+1760   8                            {
+1761   9                              str_time_alarm[i_alarm].hour-=1;            
+1762   9                            }
+1763   8                            else
+1764   8                            {
+1765   9                              str_time_alarm[i_alarm].hour=23;
+1766   9                            }
+1767   8                            //wakeup_late=0;
+1768   8                          }
+1769   7                          else
+1770   7                          {
+1771   8                            str_time_alarm[i_alarm].min=str_time_alarm[i_alarm].min-wakeup_late*5;
+1772   8                            //wakeup_late=0;
+1773   8                          }
+1774   7                          wakeup_late=0;
+1775   7                        }   
+1776   6                        break;
+1777   6                      }
+1778   5                    }
+1779   4                    if(SHAKE==0)
+1780   4                    {
+1781   5                      wakeup_late+=1;
+1782   5                      SendData(0x0a);
+1783   5                      SendData(0x05);
+1784   5                      SendData(MUSIC_YY_ADDR+music_num-0x01);
+1785   5                      SendData(0x12);
+1786   5                      str_time_alarm[i_alarm].min+=5;
+1787   5                      if(str_time_alarm[i_alarm].min>=60)
+1788   5                      {
+1789   6                        str_time_alarm[i_alarm].hour+=1;
+1790   6                        if(str_time_alarm[i_alarm].hour==24)
+C51 COMPILER V9.54   YUYIN                                                                 05/27/2019 15:40:44 PAGE 30  
+
+1791   6                        {
+1792   7                          str_time_alarm[i_alarm].hour=0;
+1793   7                        }
+1794   6                        str_time_alarm[i_alarm].min-=60;
+1795   6                      }
+1796   5                      if(wakeup_late==3)
+1797   5                      {
+1798   6                        wakeup_late=0;
+1799   6                        if(str_time_alarm[i_alarm].min<15)
+1800   6                        {
+1801   7                          str_time_alarm[i_alarm].min=str_time_alarm[i_alarm].min+60-15;
+1802   7                          if(str_time_alarm[i_alarm].hour==0)
+1803   7                          {
+1804   8                            str_time_alarm[i_alarm].hour=23;
+1805   8                          }
+1806   7                          else
+1807   7                          {
+1808   8                            str_time_alarm[i_alarm].hour-=1;
+1809   8                          }
+1810   7                        }
+1811   6                        else
+1812   6                        {
+1813   7                          str_time_alarm[i_alarm].min=str_time_alarm[i_alarm].min-15;
+1814   7                        }
+1815   6                      }
+1816   5                      music_play_time=0;
+1817   5                      break;
+1818   5                    }
+1819   4                  
+1820   4                  }
+1821   3                  //break;以前没改
+1822   3                }
+1823   2          }
+1824   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   7073    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =      4      36
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

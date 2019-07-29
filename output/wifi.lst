@@ -1,0 +1,352 @@
+C51 COMPILER V9.54   WIFI                                                                  04/08/2019 17:03:35 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE WIFI
+OBJECT MODULE PLACED IN .\output\wifi.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE wifi.c LARGE OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\output\
+                    -wifi.lst) TABS(2) OBJECT(.\output\wifi.obj)
+
+line level    source
+
+   1          #include <reg51.h>
+   2          #include <stdio.h>
+   3          #include <main.h>
+   4          #include "delay.h"
+   5          #include "string.h"
+   6          #include "ds1302.h"
+   7          sbit WIFI_LED=P2^5;
+   8          
+   9          uchar idata Rxbuff[50],Rxnum;//串口收到的
+  10          uchar Recwifi_data[5];
+  11          char *app_message=0;
+  12          char clinetid;
+  13          uchar getflag;   //getflag判断有没有发消息过来，1-发了消息
+  14          uchar service_time;  //自动校正时间按钮
+  15          extern SYSTEM_TIME str_time;
+  16          extern SYSTEM_TIME str_time_alarm[2];
+  17          extern uchar alarm_show_flag[2][7];
+  18          extern music_num;
+  19          
+  20          void app_adjust(void);
+  21          void InitUART(void)
+  22          {
+  23   1        SCON=0x50;
+  24   1        TMOD=0x20;
+  25   1        TH1=TL1=0xfd;
+  26   1        TR1=1;
+  27   1        EA=ES=1;
+  28   1      }
+  29          void Clear_Buffer(void)
+  30          {
+  31   1        Rxnum=0;
+  32   1      }
+  33           
+  34          void Clear_Rxbuff(void)
+  35          {
+  36   1        while(Rxnum<50)
+  37   1        {
+  38   2          Rxbuff[Rxnum]=0;
+  39   2          Rxnum++;
+  40   2        }
+  41   1        Rxnum=0;
+  42   1      }
+  43          
+  44          void delayms1(unsigned int x)
+  45          {
+  46   1        unsigned int i;
+  47   1        while(x--)
+  48   1          for(i=125;i>0;i--);
+  49   1      }
+  50          
+  51          void UART_send_byte(char dat)
+  52          {
+  53   1        SBUF = dat;
+  54   1        while (TI == 0);
+C51 COMPILER V9.54   WIFI                                                                  04/08/2019 17:03:35 PAGE 2   
+
+  55   1        TI = 0;
+  56   1      }
+  57          
+  58          void Send_Str(unsigned char *buf)
+  59          {
+  60   1        while (*buf != '\0')
+  61   1        {
+  62   2          UART_send_byte(*buf++);
+  63   2        }
+  64   1      }
+  65          
+  66          void ESP8266_SERVER(void)
+  67          {
+  68   1        Send_Str("AT\r\n");
+  69   1        delayms1(500);
+  70   1        app_message=strstr((const char*)Rxbuff,(const char*)"OK");
+  71   1        while(app_message==NULL)
+  72   1        {
+  73   2          Send_Str("AT\r\n");
+  74   2          delayms1(500);
+  75   2          app_message=strstr((const char*)Rxbuff,(const char*)"OK");
+  76   2        }
+  77   1        
+  78   1        Send_Str("AT\r\n");
+  79   1        delayms1(500);
+  80   1        Send_Str("AT\r\n");
+  81   1        delayms1(500);
+  82   1        Send_Str("ATE0\r\n");
+  83   1        delayms1(500);
+  84   1        
+  85   1        Send_Str("AT+CWSAP=\"ESP8266_xjh\",\"12345678\",5,3\r\n");    //5 3;11 0
+  86   1        delayms1(500);
+  87   1        Send_Str("AT+CIPMUX=1\r\n");
+  88   1        delayms1(500);  
+  89   1        
+  90   1        Clear_Buffer(); //指针返回头
+  91   1        Send_Str("AT+CIPSERVER=1,8888\r\n");
+  92   1        delayms1(500);  
+  93   1        app_message=strstr((const char*)Rxbuff,(const char*)"OK");
+  94   1        
+  95   1        while(app_message==NULL)
+  96   1        {   Clear_Buffer();  
+  97   2            delayms1(500);
+  98   2            
+  99   2            app_message=strstr((const char*)Rxbuff,(const char*)"OK");
+ 100   2        }
+ 101   1        Clear_Buffer(); 
+ 102   1        WIFI_LED=0;
+ 103   1      }
+ 104          
+ 105          
+ 106          uchar string_to_uchar(uchar in[5])
+ 107          {
+ 108   1        uint res=0;
+ 109   1        uchar i=0;
+ 110   1        uint x;
+ 111   1        while(in[i]!='\0')
+ 112   1        {
+ 113   2          x=(uint)(in[i]-0x30);
+ 114   2          res=(10*res+x);
+ 115   2          i++;
+ 116   2        }
+C51 COMPILER V9.54   WIFI                                                                  04/08/2019 17:03:35 PAGE 3   
+
+ 117   1        WIFI_LED=0;
+ 118   1        return (uchar)res;
+ 119   1      }
+ 120          
+ 121          
+ 122          
+ 123          void Send_DATA(uchar *buffer)
+ 124          {
+ 125   1          uchar i;
+ 126   1          Send_Str("AT+CIPSEND=0,3\r\n");//AT+CIPSEND=<id>,<length> 
+ 127   1          delayms1(300);
+ 128   1          Send_Str(buffer);//????
+ 129   1          delayms1(100);
+ 130   1          app_message=strstr((const char*)Rxbuff,(const char*)"SEND OK");//??OK
+ 131   1          while(app_message==NULL)
+ 132   1          {
+ 133   2            delayms1(100);
+ 134   2            app_message=strstr((const char*)Rxbuff,(const char*)"SEND OK");//??OK
+ 135   2          }
+ 136   1          app_message=strstr((const char*)Rxbuff,(const char*)"+IPD");//?????  ,???????????
+ 137   1          if(app_message)//??????
+ 138   1         {
+ 139   2             clinetid=app_message[5];
+ 140   2             app_message=strstr((const char*)Rxbuff,(const char*)":");//?????
+ 141   2             for(i=0;i<5;i++)
+ 142   2             Recwifi_data[i]=app_message[1+i];      //??????????? app_message?????????
+ 143   2             Clear_Buffer();  
+ 144   2          }
+ 145   1          Clear_Buffer();  
+ 146   1      }
+ 147          
+ 148          
+ 149          
+ 150          void fasong(uchar in)
+ 151          {
+ 152   1        unsigned char   Tx_Buf[10];
+ 153   1        uchar tmp;
+ 154   1          
+ 155   1        Tx_Buf[0]='S';  //约定的标志位
+ 156   1        tmp=(uint)(in)/10;
+ 157   1        Tx_Buf[1]=tmp+0x30;
+ 158   1        tmp=(uint)(in)%10;
+ 159   1        Tx_Buf[2]=tmp+0x30;
+ 160   1        Send_DATA(Tx_Buf);
+ 161   1      }
+ 162          
+ 163          
+ 164          void app_adjust(void)
+ 165          {
+ 166   1        uchar i=0,t=0;
+ 167   1        getflag=0;
+ 168   1        app_message=NULL;
+ 169   1        if(service_time==0)
+ 170   1        {
+ 171   2          app_message=strstr((const char*)Rxbuff,(const char*)"CONNECT");
+ 172   2        }
+ 173   1        else 
+ 174   1        {
+ 175   2          app_message='1';
+ 176   2        }
+ 177   1        delayms1(500);
+ 178   1        while(app_message)
+C51 COMPILER V9.54   WIFI                                                                  04/08/2019 17:03:35 PAGE 4   
+
+ 179   1        {
+ 180   2          app_message=NULL;
+ 181   2          Clear_Buffer(); 
+ 182   2          app_message=strstr((const char*)Rxbuff,(const char*)"+IPD");
+ 183   2          if(*app_message=='+')
+ 184   2          {
+ 185   3            getflag=1;
+ 186   3            WIFI_LED=1;
+ 187   3            break;
+ 188   3          }
+ 189   2        }
+ 190   1        app_message=strstr((const char*)Rxbuff,(const char*)"CLOSE");
+ 191   1        
+ 192   1        if(app_message)
+ 193   1        {
+ 194   2          Clear_Buffer(); 
+ 195   2          getflag=0;
+ 196   2        }
+ 197   1        if(getflag)   
+ 198   1        {
+ 199   2          delayms1(1000);
+ 200   2          clinetid=app_message[5];
+ 201   2          app_message=strstr((const char*)Rxbuff,(const char*)":");
+ 202   2          if(app_message[1]=='T')
+ 203   2          {
+ 204   3            for(i=0;i<2;i++)
+ 205   3              Recwifi_data[i]=app_message[2+i];
+ 206   3            str_time.year=string_to_uchar(Recwifi_data);
+ 207   3            
+ 208   3            for(i=0;i<2;i++)
+ 209   3              Recwifi_data[i]=app_message[4+i];
+ 210   3            str_time.month=string_to_uchar(Recwifi_data);
+ 211   3            
+ 212   3            for(i=0;i<2;i++)
+ 213   3              Recwifi_data[i]=app_message[6+i];
+ 214   3            str_time.date=string_to_uchar(Recwifi_data);
+ 215   3            
+ 216   3            for(i=0;i<2;i++)
+ 217   3              Recwifi_data[i]=app_message[8+i];
+ 218   3            str_time.hour=string_to_uchar(Recwifi_data);
+ 219   3            
+ 220   3            for(i=0;i<2;i++)
+ 221   3              Recwifi_data[i]=app_message[10+i];
+ 222   3            str_time.min=string_to_uchar(Recwifi_data);
+ 223   3            
+ 224   3            for(i=0;i<2;i++)
+ 225   3              Recwifi_data[i]=app_message[12+i];
+ 226   3            str_time.sec=string_to_uchar(Recwifi_data);
+ 227   3            
+ 228   3            for(i=0;i<2;i++)
+ 229   3              Recwifi_data[i]=app_message[14+i];
+ 230   3            str_time.day=string_to_uchar(Recwifi_data);
+ 231   3            
+ 232   3            set_time(str_time);
+ 233   3          }
+ 234   2      
+ 235   2          if(app_message[1]=='A')  //闹钟1  
+ 236   2          {
+ 237   3              for(i=0;i<2;i++)
+ 238   3                Recwifi_data[i]=app_message[2+i];
+ 239   3              str_time_alarm[0].hour=string_to_uchar(Recwifi_data);
+ 240   3              
+C51 COMPILER V9.54   WIFI                                                                  04/08/2019 17:03:35 PAGE 5   
+
+ 241   3              for(i=0;i<2;i++)
+ 242   3                Recwifi_data[i]=app_message[4+i];
+ 243   3              str_time_alarm[0].min=string_to_uchar(Recwifi_data);
+ 244   3                
+ 245   3              for(i=6;i<13;++i)
+ 246   3              {
+ 247   4                Recwifi_data[i-6]=app_message[i];
+ 248   4              }
+ 249   3                switch(string_to_uchar(Recwifi_data))
+ 250   3                {
+ 251   4                  case 0:
+ 252   4                    alarm_show_flag[0][i-6]=0x00;
+ 253   4                    break;
+ 254   4                  case 1:
+ 255   4                    alarm_show_flag[0][i-6]=0xff;
+ 256   4                    break;
+ 257   4                }
+ 258   3          }
+ 259   2          
+ 260   2          if(app_message[1]=='B')  //闹钟2
+ 261   2          {
+ 262   3              for(i=0;i<2;i++)
+ 263   3                Recwifi_data[i]=app_message[2+i];
+ 264   3              str_time_alarm[1].hour=string_to_uchar(Recwifi_data);
+ 265   3              
+ 266   3              for(i=0;i<2;i++)
+ 267   3                Recwifi_data[i]=app_message[4+i];
+ 268   3              str_time_alarm[1].min=string_to_uchar(Recwifi_data);
+ 269   3                
+ 270   3              for(i=6;i<13;++i)
+ 271   3              {
+ 272   4                Recwifi_data[i-6]=app_message[i+7];
+ 273   4              }
+ 274   3              switch(string_to_uchar(Recwifi_data))
+ 275   3              {
+ 276   4                case 0:
+ 277   4                  alarm_show_flag[1][i-6]=0x00;
+ 278   4                  break;
+ 279   4                case 1:
+ 280   4                  alarm_show_flag[1][i-6]=0xff;
+ 281   4                  break;
+ 282   4                }
+ 283   3          }   
+ 284   2          if(app_message[1]=='M')  //音乐
+ 285   2          {
+ 286   3            for(i=0;i<2;i++)
+ 287   3              Recwifi_data[i]=app_message[2+i];
+ 288   3            music_num=string_to_uchar(Recwifi_data);
+ 289   3          }
+ 290   2          service_time=1;
+ 291   2          Clear_Buffer();
+ 292   2          Clear_Rxbuff();
+ 293   2        }
+ 294   1      }
+ 295          
+ 296          
+ 297          
+ 298          
+ 299          
+ 300          void wifi_init()
+ 301          {
+ 302   1        delayms1(1000);
+C51 COMPILER V9.54   WIFI                                                                  04/08/2019 17:03:35 PAGE 6   
+
+ 303   1        InitUART(); 
+ 304   1        ESP8266_SERVER();
+ 305   1        service_time=0;
+ 306   1        delayms1(500);
+ 307   1      }
+ 308          
+ 309          void UARTInterrupt(void) interrupt 4//接收
+ 310          { 
+ 311   1        if(RI)
+ 312   1        {
+ 313   2          Rxbuff[Rxnum++]=SBUF;
+ 314   2          RI = 0;
+ 315   2          if(Rxnum>=50)
+ 316   2            Rxnum=0;
+ 317   2         }  
+ 318   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2156    ----
+   CONSTANT SIZE    =    137    ----
+   XDATA SIZE       =     11      24
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =     51    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

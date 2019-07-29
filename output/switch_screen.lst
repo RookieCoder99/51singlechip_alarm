@@ -1,0 +1,166 @@
+C51 COMPILER V9.54   SWITCH_SCREEN                                                         05/27/2019 15:40:45 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE SWITCH_SCREEN
+OBJECT MODULE PLACED IN .\output\switch_screen.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE switch_screen.c LARGE OPTIMIZE(8,SIZE) BROWSE DEBUG OBJECTEXTEND PRINT(.
+                    -\output\switch_screen.lst) TABS(2) OBJECT(.\output\switch_screen.obj)
+
+line level    source
+
+   1          #include <stdio.h>
+   2          #include "delay.h"
+   3          #include "main.h"
+   4          #include "ds1302.h"
+   5          #include "ds18B20.h"
+   6          #include "hb.h"
+   7          #include "iic.h"
+   8          #include "alarm.h"
+   9          extern bit screen_num_flag;
+  10          extern SYSTEM_TIME str_time;
+  11          extern uchar screen_num;
+  12          extern uchar festival_num;
+  13          extern uchar pbuff[2];
+  14          extern SYSTEM_TIME str_time_lunar;
+  15          void show_time_screen()
+  16          {
+  17   1        switch(screen_num)
+  18   1        {
+  19   2          case 0:
+  20   2            str_time = read_time();   //读取时间  
+  21   2            hb_show_time(str_time);
+  22   2            read_temper(pbuff);   //读取当前温度值
+  23   2            temper_convert(); // 启动温度转换，需要750ms
+  24   2            hb_show_temp(pbuff[0], pbuff[1]);   //显示当前温度
+  25   2            cal_festival();
+  26   2            cal_jieqi( str_time);
+  27   2            judge_leap_month(str_time.year,str_time.month,str_time.date);
+  28   2            sun_to_lunar(0,str_time.year,str_time.month,str_time.date,1);
+  29   2            break;
+  30   2          case 1:
+  31   2            str_time = read_time();   //读取时间  
+  32   2            hb_show_big_time_only(str_time);
+  33   2            break;
+  34   2          case 2:
+  35   2            if(screen_num_flag==1)
+  36   2            {
+  37   3              screen_num_flag=0;
+  38   3              str_time = read_time();   //读取时间  
+  39   3              hb_show_big_date_only(str_time);
+  40   3              show_lunar(str_time.year,str_time.month,str_time.date);
+  41   3              delay_ms(100);
+  42   3              show_lunar_festival();    
+  43   3              delay_ms(100);
+  44   3              show_festival();  
+  45   3              delay_ms(100);
+  46   3              show_jieqi(str_time);
+  47   3            }
+  48   2            break;
+  49   2        }
+  50   1      }
+  51          
+  52          void switch_screen()
+  53          {
+  54   1            if(ADD==0)
+C51 COMPILER V9.54   SWITCH_SCREEN                                                         05/27/2019 15:40:45 PAGE 2   
+
+  55   1            {
+  56   2              delay_ms(40);
+  57   2              if(ADD==0)
+  58   2              {
+  59   3                screen_num+=1;
+  60   3                if(screen_num==3)
+  61   3                {
+  62   4                  screen_num=0;
+  63   4                }
+  64   3                clean_all();
+  65   3                
+  66   3                switch(screen_num)
+  67   3                {
+  68   4                  case 0:
+  69   4                    clean_all();
+  70   4                    hb_show_time(str_time);
+  71   4                    read_temper(pbuff);   //读取当前温度值
+  72   4                    temper_convert(); // 启动温度转换，需要750ms
+  73   4                    hb_show_temp(pbuff[0], pbuff[1]);   //显示当前温度
+  74   4                    break;
+  75   4                  case 1:
+  76   4                    clean_all();
+  77   4                    hb_show_big_time_only(str_time);
+  78   4                    break;
+  79   4                  case 2:
+  80   4                    clean_all();
+  81   4                    hb_show_big_date_only(str_time);
+  82   4                    //read_temper(pbuff); //读取当前温度值
+  83   4                    //temper_convert(); //启动温度转换，需要750ms
+  84   4                    //hb_show_big_temp(pbuff[0], pbuff[1]);
+  85   4                    show_lunar(str_time.year,str_time.month,str_time.date);
+  86   4                    delay_ms(100);
+  87   4                    show_lunar_festival();    
+  88   4                    delay_ms(100);
+  89   4                    show_festival();  
+  90   4                    delay_ms(100);
+  91   4                    show_jieqi(str_time);
+  92   4                    break;
+  93   4                }
+  94   3              }
+  95   2            }
+  96   1            if(SUB==0)
+  97   1            {
+  98   2              delay_ms(40);
+  99   2              if(SUB==0)
+ 100   2              {
+ 101   3                if(screen_num==0)
+ 102   3                {
+ 103   4                  screen_num=3;
+ 104   4                }
+ 105   3                screen_num-=1;
+ 106   3                clean_all();
+ 107   3                switch(screen_num)
+ 108   3                {
+ 109   4                  case 0:
+ 110   4                    clean_all();
+ 111   4                    hb_show_time(str_time);
+ 112   4                    read_temper(pbuff);   //读取当前温度值
+ 113   4                    temper_convert(); // 启动温度转换，需要750ms
+ 114   4                    hb_show_temp(pbuff[0], pbuff[1]);   //显示当前温度
+ 115   4                    break;
+ 116   4                  case 1:
+C51 COMPILER V9.54   SWITCH_SCREEN                                                         05/27/2019 15:40:45 PAGE 3   
+
+ 117   4                    clean_all();
+ 118   4                    hb_show_big_time_only(str_time);
+ 119   4                    break;
+ 120   4                  case 2:
+ 121   4                    clean_all();
+ 122   4                    hb_show_big_date_only(str_time);
+ 123   4                    //read_temper(pbuff); //读取当前温度值
+ 124   4                    //temper_convert(); //启动温度转换，需要750ms
+ 125   4                    //hb_show_big_temp(pbuff[0], pbuff[1]);
+ 126   4                    show_lunar(str_time.year,str_time.month,str_time.date);
+ 127   4                    delay_ms(100);
+ 128   4                    show_lunar_festival();    
+ 129   4                    delay_ms(100);
+ 130   4                    show_festival();  
+ 131   4                    delay_ms(100);
+ 132   4                    show_jieqi(str_time);
+ 133   4                    break;
+ 134   4                }
+ 135   3              }
+ 136   2            }
+ 137   1          write_IIC(SCREEN_NUM_ADDR, screen_num);
+ 138   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    746    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

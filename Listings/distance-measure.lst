@@ -1,0 +1,69 @@
+C51 COMPILER V9.54   DISTANCE_MEASURE                                                      05/22/2019 21:27:21 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE DISTANCE_MEASURE
+OBJECT MODULE PLACED IN .\Objects\distance-measure.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE distance-measure.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\L
+                    -istings\distance-measure.lst) TABS(2) OBJECT(.\Objects\distance-measure.obj)
+
+line level    source
+
+   1          #include <reg52.h>                        
+   2          #include <stdio.h>                
+   3          #include <absacc.h>              
+   4          #include <intrins.h>
+   5          #define uint unsigned int
+   6          #define uchar unsigned char
+   7          sbit Trig= P1^3;
+   8          void square();
+   9          void square(void)
+  10          {
+  11   1        uint i;
+  12   1        for (i = 8; i > 0; i--);
+  13   1        {
+  14   2          Trig=1;
+  15   2          nop_();
+  16   2          Trig=0;
+  17   2          nop_();
+  18   2        };
+  19   1      }
+  20          float dist()
+  21          {
+  22   1      uint echo_time;
+  23   1      uint timeH;
+  24   1        uint timeL;
+  25   1      float dist; 
+  26   1      echo_time=0;
+  27   1      IT0=1;
+  28   1      
+  29   1      
+  30   1      TR0=1;
+  31   1      square();
+  32   1        while(TH<30);
+*** ERROR C202 IN LINE 32 OF distance-measure.c: 'TH': undefined identifier
+  33   1      EA=1;
+  34   1      EX0=1;
+  35   1      timeH=TH0;
+  36   1      timeL=TL0;
+  37   1      echo_time=256*timeH+timeL;  
+  38   1      dist=(float)echo_time*(331.4+0.607*temp())/20000;
+  39   1      return dist;
+  40   1      while(1);
+  41   1      }
+  42          void receive1_int() interrupt 0      //int0 
+  43          {
+  44   1        TR0=0;
+  45   1      
+  46   1        EA=0;
+  47   1        EX0=EX1=0;      
+  48   1      }
+  49          void timer4_int() interrupt 1      
+  50          {
+  51   1        TR0=0;
+  52   1        TH0=0;
+  53   1        TL0=0;
+C51 COMPILER V9.54   DISTANCE_MEASURE                                                      05/22/2019 21:27:21 PAGE 2   
+
+  54   1      }
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  1 ERROR(S)

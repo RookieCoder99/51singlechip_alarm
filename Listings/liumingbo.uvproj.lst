@@ -1,0 +1,288 @@
+C51 COMPILER V9.54   LIUMINGBO_UVPROJ                                                      05/22/2019 20:59:13 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE LIUMINGBO_UVPROJ
+OBJECT MODULE PLACED IN .\Objects\liumingbo.uvproj.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE liumingbo.uvproj.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\L
+                    -istings\liumingbo.uvproj.lst) TABS(2) OBJECT(.\Objects\liumingbo.uvproj.obj)
+
+line level    source
+
+   1          #include <reg52.h>                        
+   2          #include <stdio.h>                
+   3          #include <absacc.h>              
+   4          #include <intrins.h>
+   5          #include<string.H>
+   6          #define uchar unsigned char
+   7          #define uint unsigned int
+   8           
+   9          //??????
+  10          #define CHAR        0xF0  
+  11          #define NUM_9_16      0xE3  
+  12          #define LIGHT_SET     0xE5  
+  13          #define SCREEN_CLA      0xF4
+  14          #define STR_CHAR    0xE9
+  15          #define STRCHAR_12_12     0xB9 
+  16          #define DELAY_TIME  10     
+  17          extern float dist;
+  18          sbit BUSY=P3^4;
+  19          sbit TMDAT=P1^0;
+  20          sbit REQ=P3^5;
+  21          sbit Warn= P1^1;
+  22          void dmsec(uint count)        //1.5ms??
+  23          {
+  24   1        
+  25   1        uint i;                   
+  26   1        while(count--)  
+  27   1        {
+  28   2           for(i=0;i<125;i++){}        
+  29   2        } ;
+  30   1      }
+  31          void Delay_1ms(uint j)   //??11.0592MHz????1ms
+  32          { 
+  33   1        uchar i; 
+  34   1        while(j--)
+  35   1        { 
+  36   2          for(i=0;i<125;i++);
+  37   2        } 
+  38   1      }
+  39          
+  40          void dmsec(unsigned int count);
+  41          void tmreset(void);
+  42          void tmstart(void);
+  43          unsigned int tmrtemp(void);
+  44          float temp(void)
+  45          {     
+  46   1        int a,lastI;
+  47   1        unsigned char lastF;    
+  48   1        float last;
+  49   1        dmsec(1);
+  50   1        tmstart();     
+  51   1        dmsec(1); 
+  52   1        a=tmrtemp();  
+  53   1        lastI=a>>4;
+  54   1        lastF=(a&0x000f)*0.625;
+C51 COMPILER V9.54   LIUMINGBO_UVPROJ                                                      05/22/2019 20:59:13 PAGE 2   
+
+  55   1        last=lastI+0.1*lastF;
+  56   1        return last;
+  57   1      }
+  58          //???????
+  59          void tmreset(void)                 //Reset TX
+  60          {
+  61   1         unsigned int i;
+  62   1         TMDAT=0;
+  63   1         i=103;
+  64   1         while(i>0) i--;  
+  65   1         TMDAT=1;
+  66   1         i=4;
+  67   1         while(i>0) i--; 
+  68   1      }
+  69          void tmpre(void)                             //Wait for Presence RX
+  70          {
+  71   1         unsigned int i;
+  72   1         while(TMDAT);
+  73   1         while(~TMDAT);
+  74   1         i=4;
+  75   1         while(i>0)  i--;
+  76   1      }
+  77          bit tmrbit(void)               //read one bit
+  78          {
+  79   1         unsigned int i;
+  80   1         bit dat;
+  81   1         TMDAT=0;  i++;
+  82   1         TMDAT=1;  i++;i++;
+  83   1         dat=TMDAT;
+  84   1         i=8;
+  85   1         while(i>0) i--;
+  86   1         return(dat);
+  87   1      }
+  88          unsigned char tmrbyte(void)                //read one byte
+  89          {
+  90   1         unsigned char i,j,dat;
+  91   1         dat=0;
+  92   1         for(i=1;i<=8;i++)
+  93   1         {
+  94   2          j=tmrbit();
+  95   2          dat=(j<<7)|(dat>>1);
+  96   2         }
+  97   1         return(dat);
+  98   1      }
+  99          void tmwbyte(unsigned char dat)       //write one byte
+ 100          {
+ 101   1         unsigned int i;
+ 102   1         unsigned char j;
+ 103   1         bit testb;
+ 104   1         for(j=1;j<=8;j++)
+ 105   1         {
+ 106   2          testb=dat&0x01;
+ 107   2          dat=dat>>1;
+ 108   2          if(testb)
+ 109   2            {
+ 110   3             TMDAT=0;                 //write 1
+ 111   3             i++;i++;
+ 112   3             TMDAT=1;
+ 113   3             i=8;
+ 114   3             while(i>0)  i--;
+ 115   3          }
+ 116   2          else
+C51 COMPILER V9.54   LIUMINGBO_UVPROJ                                                      05/22/2019 20:59:13 PAGE 3   
+
+ 117   2            {
+ 118   3             TMDAT=0;                //write 0
+ 119   3             i=8;
+ 120   3             while(i>0) i--;
+ 121   3             TMDAT=1;
+ 122   3             i++;i++;
+ 123   3          }
+ 124   2         }
+ 125   1      }
+ 126          
+ 127          void tmstart(void)                 //ds1820 start convert
+ 128          {
+ 129   1         tmreset();
+ 130   1         tmpre();
+ 131   1         dmsec(1);
+ 132   1         tmwbyte(0xcc);                 //skip rom
+ 133   1         tmwbyte(0x44);                 //convert
+ 134   1      }
+ 135          
+ 136          unsigned int tmrtemp(void)      //read temp
+ 137          {
+ 138   1         unsigned char a,b,y1,y2,y3;
+ 139   1         unsigned int wd;
+ 140   1         tmreset();
+ 141   1         tmpre();
+ 142   1         dmsec(1);            
+ 143   1         tmwbyte(0xcc);         //skip rom
+ 144   1         tmwbyte(0xbe);         //convert
+ 145   1         a=tmrbyte();           //LSB
+ 146   1         b=tmrbyte();           //MSB
+ 147   1         wd=b<<8|a;
+ 148   1         y1=a>>4;
+ 149   1         y2=b<<4;
+ 150   1         y3=y1|y2;   
+ 151   1         return(wd);
+ 152   1      }
+ 153          //????
+ 154          
+ 155          //????
+ 156          void send(uchar ch)
+ 157          { 
+ 158   1        while(BUSY);          
+ 159   1        P0=ch;            
+ 160   1        REQ=0;            
+ 161   1        nop_();nop_();nop_();nop_();      
+ 162   1        nop_();nop_();nop_();nop_();
+ 163   1        nop_();nop_();nop_();nop_();
+ 164   1        REQ=1;          
+ 165   1      }
+ 166          
+ 167          void Screen_Con(uchar command)    
+ 168          {
+ 169   1        send(command);
+ 170   1      }
+ 171          
+ 172          void Display_Lin(uchar command,uchar x,uchar y,uchar typ1,uchar typ2,uchar len) //??
+ 173          {
+ 174   1        send(command);
+ 175   1        send(x);
+ 176   1        send(y);
+ 177   1        send(typ1);
+ 178   1        send(typ2);
+C51 COMPILER V9.54   LIUMINGBO_UVPROJ                                                      05/22/2019 20:59:13 PAGE 4   
+
+ 179   1        send(len);
+ 180   1      }
+ 181          
+ 182          void Display_StrChar(uchar command,uchar x,uchar y,uchar *p) //???????
+ 183          {                                                           
+ 184   1        send(command);
+ 185   1        send(x);
+ 186   1        send(y);
+ 187   1        while(*p!='\0')
+ 188   1        {
+ 189   2           send(*p);
+ 190   2           p++;
+ 191   2        }
+ 192   1        send(0x00);
+ 193   1      }
+ 194          uchar * Ten_to_Str(float x)
+ 195          {
+ 196   1        uchar t;
+ 197   1        uint Ten=0;
+ 198   1        uchar *p;
+ 199   1        uchar str[5];
+ 200   1        p = &str;
+ 201   1        Ten = (uint)(x * 10); //???????
+ 202   1        t = Ten / 100;       //?????ASCII? 
+ 203   1        str[0] = t + 0x30;
+ 204   1        Ten = Ten - t*100;
+ 205   1        t = Ten/10;
+ 206   1        str[1] = t + 0x30;
+ 207   1        str[2] = 0x2e;    
+ 208   1        t = Ten % 10; 
+ 209   1        str[3] = t + 0x30;   
+ 210   1        str[4] = '\0'; 
+ 211   1        return p;
+ 212   1      }
+ 213          uchar * Hun_to_Str(float x1)
+ 214          {
+ 215   1        uchar t1;
+ 216   1        uint Hun=0;
+ 217   1        uchar *p1;
+ 218   1        uchar data str [6];
+ 219   1        p1 = &str[0];
+ 220   1        Hun = (uint)(x1*10);//3314
+ 221   1        t1 = Hun/1000;//3
+ 222   1        str[0]=t1+0x30;
+ 223   1        Hun = Hun - t1*1000;
+ 224   1        t1 = Hun/100;
+ 225   1        str[1]=t1+0x30;
+ 226   1        Hun = Hun - t1*100;
+ 227   1        t1 = Hun/10;
+ 228   1        str[2] = t1+0x30;
+ 229   1        str[3] = 0x2e;
+ 230   1        str[4] = Hun%10+0x30;
+ 231   1        str[5] = '\0';
+ 232   1        return p1;
+ 233   1      }
+ 234          
+ 235          
+ 236          void main(void)
+ 237          { uchar *v,*t,*d;
+ 238   1        Screen_Con(LIGHT_SET);Delay_1ms(DELAY_TIME);
+ 239   1        Screen_Con(SCREEN_CLA);Delay_1ms(DELAY_TIME); 
+ 240   1        //??
+C51 COMPILER V9.54   LIUMINGBO_UVPROJ                                                      05/22/2019 20:59:13 PAGE 5   
+
+ 241   1        Display_Lin(0xc5,0,0,0,1,64); Delay_1ms(DELAY_TIME);
+ 242   1        Display_Lin(0xc5,0,127,0,1,64); Delay_1ms(DELAY_TIME);
+ 243   1        Display_Lin(0xc5,0,0,1,1,128);  Delay_1ms(DELAY_TIME);
+ 244   1        Display_Lin(0xc5,63,0,1,1,128); Delay_1ms(DELAY_TIME);
+ 245   1        //??????
+ 246   1        Display_StrChar(STRCHAR_12_12,0x01,0x04,"智能超声测距仪");Delay_1ms(DELAY_TIME);
+ 247   1        Display_StrChar(STRCHAR_12_12,0x02,0x01,"当前声速:");Delay_1ms(DELAY_TIME);
+ 248   1        Display_StrChar(STRCHAR_12_12,0x03,0x01,"环境温度:");Delay_1ms(DELAY_TIME);
+ 249   1        Display_StrChar(STRCHAR_12_12,0x04,0x01,"测得的距离:");Delay_1ms(DELAY_TIME);
+ 250   1        while(1)
+ 251   1        {
+ 252   2          v=Hun_to_Str(331.4+0.607*temp());   Display_StrChar(STRCHAR_12_12,0x02,0x10,v);Delay_1ms(DELAY_TIME);
+ 253   2          t=Ten_to_Str(temp());   Display_StrChar(STRCHAR_12_12,0x03,0x11,t);Delay_1ms(DELAY_TIME);
+ 254   2           d=Hun_to_Str(dist);                 Display_StrChar(STRCHAR_12_12,0x04,0x10,d);Delay_1ms(DELAY_TIME);
+ 255   2        }
+ 256   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   1057    ----
+   CONSTANT SIZE    =     47    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----      49
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----       2
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

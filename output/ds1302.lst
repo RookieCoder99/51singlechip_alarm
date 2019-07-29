@@ -1,0 +1,869 @@
+C51 COMPILER V9.54   DS1302                                                                05/27/2019 15:40:44 PAGE 1   
+
+
+C51 COMPILER V9.54, COMPILATION OF MODULE DS1302
+OBJECT MODULE PLACED IN .\output\ds1302.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ds1302.c LARGE OPTIMIZE(8,SIZE) BROWSE DEBUG OBJECTEXTEND PRINT(.\output
+                    -\ds1302.lst) TABS(2) OBJECT(.\output\ds1302.obj)
+
+line level    source
+
+   1          /*****************************************************************************
+   2          * 文件名：ds1302.c
+   3          * 说  明：操作DS1302的基本函数
+   4          *****************************************************************************/
+   5          #include "main.h"
+   6          #include "ds1302.h"
+   7          #include "hb.h"
+   8          #include "delay.h"
+   9          #define BCD2DEC(X)  (((X&0x70)>>4)*10 + (X&0x0F)) //用于将BCD码转成十进制
+  10          #define DEC2BCD(X)  ((X/10)<<4 | (X%10))      //用于将十进制转成BCD码
+  11          //DS1302的引脚定义
+  12          sbit DS_RST = P1^0;
+  13          sbit DS_SCLK = P1^1;
+  14          sbit DS_IO = P1^2;
+  15          
+  16          extern SYSTEM_TIME str_time;
+  17          extern uchar cur_pos;
+  18          extern uchar screen_num;
+  19          /******************************************************
+  20          * 函  数：初始化DS1302的引脚
+  21          * 参  数：空
+  22          ******************************************************/
+  23          void ds1302_init(void)
+  24          {
+  25   1        DS_RST = 0;
+  26   1        DS_SCLK = 0;
+  27   1        DS_IO = 0;
+  28   1      }
+  29          
+  30          /******************************************************
+  31          * 函  数：写单字节到DS1302
+  32          * 参  数：dat要写的数据
+  33          ******************************************************/
+  34          void write_byte(uchar dat)
+  35          {
+  36   1        uchar i = 0;
+  37   1        
+  38   1        for(i=0; i<8; i++)
+  39   1        {
+  40   2          DS_SCLK = 0;
+  41   2          DS_IO = (dat&1);
+  42   2          _nop_(),_nop_();
+  43   2          DS_SCLK = 1;    //上升沿发出数据
+  44   2          _nop_(),_nop_();
+  45   2          dat >>= 1;
+  46   2        }
+  47   1      }
+  48          
+  49          /******************************************************
+  50          * 函  数：从DS1302读单字节
+  51          * 参  数：空
+  52          * 返回值：返回读取的字节（10进制）
+  53          ******************************************************/
+  54          uchar read_byte(void)
+C51 COMPILER V9.54   DS1302                                                                05/27/2019 15:40:44 PAGE 2   
+
+  55          {
+  56   1        uchar i = 0;
+  57   1        uchar dat = 0;
+  58   1        uchar tmp = 0;  
+  59   1      //  i = (i++)%10;
+  60   1      
+  61   1        for(i=0; i<8; i++)
+  62   1        {     
+  63   2          DS_SCLK = 1;    
+  64   2          _nop_(),_nop_();      
+  65   2          DS_SCLK = 0;    //下降沿读出数据
+  66   2          _nop_(),_nop_();
+  67   2          tmp = DS_IO;
+  68   2          dat >>= 1;      //先读的是低位，移位为低位
+  69   2          dat |= (tmp<<7);
+  70   2        }
+  71   1      
+  72   1        dat = BCD2DEC(dat);     //BCD转换
+  73   1        return(dat);
+  74   1      }
+  75          
+  76          /******************************************************
+  77          * 函  数：从DS1302的指定位置读数据
+  78          * 参  数：addr要读取数据的控制字（地址/命令）
+  79          * 返回值：返回读取的数字（10进制）
+  80          ******************************************************/
+  81          uchar read_ds1302(uchar addr)
+  82          {
+  83   1        uchar tmp;
+  84   1      
+  85   1        DS_RST = 0;
+  86   1        DS_SCLK = 0;
+  87   1        DS_RST = 1;
+  88   1        write_byte(addr);
+  89   1        tmp = read_byte();
+  90   1        DS_RST = 0;
+  91   1        DS_SCLK = 0;
+  92   1        DS_IO = 0;
+  93   1      
+  94   1        return(tmp);
+  95   1      }
+  96          
+  97          /******************************************************
+  98          * 函  数：写数据到DS1302的指定位置
+  99          * 参  数：addr要写入数据的控制字（地址/命令）
+ 100          *         dat要写的数据
+ 101          ******************************************************/
+ 102          void write_ds1302(uchar addr, uchar dat)
+ 103          {
+ 104   1        uchar tmp = 0;
+ 105   1        tmp = DEC2BCD(dat);
+ 106   1      
+ 107   1        DS_RST = 0;
+ 108   1        DS_SCLK = 0;
+ 109   1        DS_RST = 1;
+ 110   1        write_byte(addr);
+ 111   1        write_byte(tmp);
+ 112   1        DS_RST = 0;
+ 113   1        DS_SCLK = 0;
+ 114   1      }
+ 115          
+ 116          /******************************************************
+C51 COMPILER V9.54   DS1302                                                                05/27/2019 15:40:44 PAGE 3   
+
+ 117          * 函  数：读取年、月、日、时、分、秒、星期
+ 118          * 参  数：无
+ 119          * 返回值：str_time读取到的时间
+ 120          ******************************************************/
+ 121          SYSTEM_TIME read_time(void)
+ 122          {
+ 123   1        SYSTEM_TIME str_time;
+ 124   1        str_time.year = read_ds1302(DS1302_YEAR|0x01);//或0x01表示地址+1读指令
+ 125   1        str_time.month = read_ds1302(DS1302_MONTH|0x01);
+ 126   1        str_time.date = read_ds1302(DS1302_DATE|0x01);
+ 127   1        str_time.hour = read_ds1302(DS1302_HOUR|0x01);
+ 128   1        str_time.min = read_ds1302(DS1302_MIN|0x01);
+ 129   1        str_time.sec = read_ds1302(DS1302_SEC|0x01);
+ 130   1        return(str_time);
+ 131   1      }
+ 132          
+ 133          /******************************************************
+ 134          * 函  数：设置DS1302的年、月、日、时、分、秒、星期
+ 135          * 参  数：str_time要设定的时间
+ 136          ******************************************************/
+ 137          void set_time(SYSTEM_TIME str_time)
+ 138          { 
+ 139   1        write_ds1302(0x8E, 0x00);//0x8e写保护位，为0是允许写
+ 140   1        write_ds1302(DS1302_YEAR, str_time.year);   
+ 141   1        write_ds1302(DS1302_MONTH, str_time.month); 
+ 142   1        write_ds1302(DS1302_DATE, str_time.date);
+ 143   1        write_ds1302(DS1302_HOUR, str_time.hour);
+ 144   1        write_ds1302(DS1302_MIN, str_time.min);   
+ 145   1        write_ds1302(DS1302_SEC, str_time.sec);   
+ 146   1        write_ds1302(0x8E, 0x80);   
+ 147   1      }
+ 148          
+ 149          
+ 150          void add_sub_year(SYSTEM_TIME str_time,uchar i)
+ 151          {
+ 152   1        if(i==1)
+ 153   1        {
+ 154   2          if(str_time.year==99)
+ 155   2            str_time.year=0;
+ 156   2          else
+ 157   2            str_time.year=str_time.year+1;
+ 158   2        }
+ 159   1        else
+ 160   1        {
+ 161   2          if(str_time.year==0)
+ 162   2            str_time.year=99;
+ 163   2          else
+ 164   2            str_time.year=str_time.year-1;
+ 165   2        }
+ 166   1          str_time.sec=0;
+ 167   1          set_time(str_time);
+ 168   1      }
+ 169          void add_sub_month(SYSTEM_TIME str_time,uchar i)
+ 170          {
+ 171   1        if(i==1)
+ 172   1        {
+ 173   2          if(str_time.month==12)
+ 174   2            str_time.month=0;
+ 175   2          str_time.month+=1;
+ 176   2        }
+ 177   1        else
+ 178   1        {
+C51 COMPILER V9.54   DS1302                                                                05/27/2019 15:40:44 PAGE 4   
+
+ 179   2          if(str_time.month==1)
+ 180   2            str_time.month=13;
+ 181   2          str_time.month-=1;
+ 182   2        }
+ 183   1        str_time.sec=0;
+ 184   1        set_time(str_time);
+ 185   1      }
+ 186          void add_sub_date(SYSTEM_TIME str_time,uchar i)
+ 187          {
+ 188   1        if(i==1)
+ 189   1        {
+ 190   2          switch(str_time.month)
+ 191   2          {
+ 192   3            case 1:
+ 193   3            case 3:
+ 194   3            case 5:
+ 195   3            case 7:
+ 196   3            case 8:
+ 197   3            case 10:
+ 198   3            case 12:
+ 199   3              if(str_time.date==31)
+ 200   3              {
+ 201   4                str_time.date=0;
+ 202   4              }
+ 203   3              str_time.date+=1;
+ 204   3              break;
+ 205   3            case 4:
+ 206   3            case 6:
+ 207   3            case 9:
+ 208   3            case 11:
+ 209   3              if(str_time.date==30)
+ 210   3              {
+ 211   4                str_time.date=0;
+ 212   4              }
+ 213   3              str_time.date+=1;
+ 214   3              break;
+ 215   3            case 2:
+ 216   3              if(str_time.year%4==0)
+ 217   3              {
+ 218   4                if(str_time.date==29)
+ 219   4                {
+ 220   5                  str_time.date=0;
+ 221   5                }
+ 222   4                str_time.date+=1;
+ 223   4                break;
+ 224   4              }
+ 225   3              else
+ 226   3              {
+ 227   4                if(str_time.date==28)
+ 228   4                {
+ 229   5                  str_time.date=0;
+ 230   5                }
+ 231   4                str_time.date+=1;
+ 232   4                break;
+ 233   4              }
+ 234   3          }
+ 235   2        }
+ 236   1        else
+ 237   1        {
+ 238   2            switch(str_time.month)
+ 239   2            {
+ 240   3              case 1:
+C51 COMPILER V9.54   DS1302                                                                05/27/2019 15:40:44 PAGE 5   
+
+ 241   3              case 3:
+ 242   3              case 5:
+ 243   3              case 7:
+ 244   3              case 8:
+ 245   3              case 10:
+ 246   3              case 12:
+ 247   3                if(str_time.date==1)
+ 248   3                {
+ 249   4                  str_time.date=32;
+ 250   4                }
+ 251   3                str_time.date-=1;
+ 252   3                break;
+ 253   3              case 4:
+ 254   3              case 6:
+ 255   3              case 9:
+ 256   3              case 11:
+ 257   3                if(str_time.date==1)
+ 258   3                {
+ 259   4                  str_time.date=31;
+ 260   4                }
+ 261   3                str_time.date-=1;
+ 262   3                break;
+ 263   3              case 2:
+ 264   3                if(str_time.year%4==0)
+ 265   3                {
+ 266   4                  if(str_time.date==1)
+ 267   4                  {
+ 268   5                    str_time.date=30;
+ 269   5                  }
+ 270   4                  str_time.date-=1;
+ 271   4                  break;
+ 272   4                }
+ 273   3                else
+ 274   3                {
+ 275   4                  if(str_time.date==1)
+ 276   4                  {
+ 277   5                    str_time.date=29;
+ 278   5                  }
+ 279   4                  str_time.date-=1;
+ 280   4                  break;
+ 281   4                }
+ 282   3            }
+ 283   2        }
+ 284   1        str_time.sec=0;
+ 285   1        set_time(str_time);
+ 286   1      }
+ 287          
+ 288          void add_sub_hour(SYSTEM_TIME str_time,uchar i)
+ 289          {
+ 290   1        if(i==1)
+ 291   1        {
+ 292   2          str_time.hour+=1;
+ 293   2          if(str_time.hour==24)
+ 294   2          {
+ 295   3            str_time.hour=0;
+ 296   3          }
+ 297   2      
+ 298   2        }
+ 299   1        else
+ 300   1        {
+ 301   2          if(str_time.hour==0)
+ 302   2          {
+C51 COMPILER V9.54   DS1302                                                                05/27/2019 15:40:44 PAGE 6   
+
+ 303   3            str_time.hour=24;
+ 304   3          }
+ 305   2          str_time.hour-=1;
+ 306   2        }
+ 307   1        str_time.sec=0;
+ 308   1        set_time(str_time);
+ 309   1      }
+ 310          void add_sub_min(SYSTEM_TIME str_time,uchar i)
+ 311          {
+ 312   1        if(i==1)
+ 313   1        {
+ 314   2          str_time.min+=1;
+ 315   2          if(str_time.min==60)
+ 316   2          {
+ 317   3            str_time.min=0;
+ 318   3          }
+ 319   2        }
+ 320   1        else
+ 321   1        {
+ 322   2          if(str_time.min==0)
+ 323   2          {
+ 324   3            str_time.min=60;
+ 325   3          }
+ 326   2          str_time.min-=1;
+ 327   2        }
+ 328   1        str_time.sec=0;
+ 329   1        set_time(str_time);
+ 330   1      }
+ 331          
+ 332          
+ 333          
+ 334          
+ 335          
+ 336          
+ 337          
+ 338          SYSTEM_TIME add_sub_hour_alarm(SYSTEM_TIME str_time,uchar i)
+ 339          {
+ 340   1        if(i==1)
+ 341   1        {
+ 342   2          str_time.hour+=1;
+ 343   2          if(str_time.hour==24)
+ 344   2          {
+ 345   3            str_time.hour=0;
+ 346   3          }
+ 347   2      
+ 348   2        }
+ 349   1        else
+ 350   1        {
+ 351   2          if(str_time.hour==0)
+ 352   2          {
+ 353   3            str_time.hour=24;
+ 354   3          }
+ 355   2          str_time.hour-=1;
+ 356   2        }
+ 357   1        str_time.sec=0;
+ 358   1        return str_time;
+ 359   1      }
+ 360          SYSTEM_TIME add_sub_min_alarm(SYSTEM_TIME str_time,uchar i)
+ 361          {
+ 362   1        if(i==1)
+ 363   1        {
+ 364   2          str_time.min+=1;
+C51 COMPILER V9.54   DS1302                                                                05/27/2019 15:40:44 PAGE 7   
+
+ 365   2          if(str_time.min==60)
+ 366   2          {
+ 367   3            str_time.min=0;
+ 368   3          }
+ 369   2        }
+ 370   1        else
+ 371   1        {
+ 372   2          if(str_time.min==0)
+ 373   2          {
+ 374   3            str_time.min=60;
+ 375   3          }
+ 376   2          str_time.min-=1;
+ 377   2        }
+ 378   1        str_time.sec=0;
+ 379   1        return str_time;
+ 380   1      }
+ 381          
+ 382          void adjust_time()
+ 383          {
+ 384   1        uchar set_blink_flag=0;
+ 385   1        while(!SWITCH)
+ 386   1        {
+ 387   2            delay_ms(20);
+ 388   2            if(SWITCH!=0) //加这个因为那个按钮总是会误触导致抖动
+ 389   2            {
+ 390   3              break;
+ 391   3            }
+ 392   2            while(1)
+ 393   2            {
+ 394   3              switch(screen_num)
+ 395   3              {
+ 396   4                case 0:
+ 397   4                  if(cur_pos==0 && set_blink_flag==0)
+ 398   4                  {
+ 399   5                    show_set();
+ 400   5                    set_start_blink();
+ 401   5                    set_blink_flag=1;
+ 402   5                  }
+ 403   4                  if(ALARM==0)
+ 404   4                  {
+ 405   5                    delay_ms(40);
+ 406   5                    if(ALARM==0)
+ 407   5                    {
+ 408   6                      switch(cur_pos)
+ 409   6                      {
+ 410   7                        case 1:
+ 411   7                          stop_blink_year();
+ 412   7                          break;
+ 413   7                        case 2:
+ 414   7                          stop_blink_month();
+ 415   7                          break;
+ 416   7                        case 3:
+ 417   7                          stop_blink_date();
+ 418   7                          break;
+ 419   7                        case 4:
+ 420   7                          stop_blink_hour();
+ 421   7                          break;
+ 422   7                        case 5:
+ 423   7                          stop_blink_min();
+ 424   7                          break;
+ 425   7                      }
+ 426   6                      cur_pos=0;
+C51 COMPILER V9.54   DS1302                                                                05/27/2019 15:40:44 PAGE 8   
+
+ 427   6                      set_blink_flag=0;
+ 428   6                      set_stop_blink();
+ 429   6                      clean_set();
+ 430   6                      break;
+ 431   6                    }
+ 432   5                  }
+ 433   4                  if(SWITCH==0)
+ 434   4                  {
+ 435   5                    delay_ms(90);
+ 436   5                    if(SWITCH==0)
+ 437   5                    {
+ 438   6                      cur_pos+=1;
+ 439   6                      if(cur_pos==6)
+ 440   6                      {
+ 441   7                        cur_pos=0;
+ 442   7                        set_blink_flag=0;
+ 443   7                        stop_blink_min();
+ 444   7                        set_stop_blink();
+ 445   7                        clean_set();
+ 446   7                        break;
+ 447   7                      }
+ 448   6                      switch (cur_pos)
+ 449   6                      {
+ 450   7                        case 1:
+ 451   7                          set_stop_blink();
+ 452   7                          start_blink_year();
+ 453   7                          break;
+ 454   7                        case 2:
+ 455   7                          stop_blink_year();
+ 456   7                          start_blink_month();
+ 457   7                          break;
+ 458   7                        case 3:
+ 459   7                          stop_blink_month();
+ 460   7                          start_blink_date();
+ 461   7                          break;
+ 462   7                        case 4:
+ 463   7                          stop_blink_date();
+ 464   7                          start_blink_hour();
+ 465   7                          break;
+ 466   7                        case 5:
+ 467   7                          stop_blink_hour();
+ 468   7                          start_blink_min();
+ 469   7                          break;
+ 470   7                      }
+ 471   6                    }
+ 472   5                  }
+ 473   4                  if(ADD==0)
+ 474   4                  {
+ 475   5                    delay_ms(90);
+ 476   5                    if(ADD==0)
+ 477   5                    {
+ 478   6                      switch (cur_pos)
+ 479   6                      {
+ 480   7                        case 1:
+ 481   7                          stop_blink_year();
+ 482   7                          add_sub_year(str_time,1);
+ 483   7                          str_time = read_time(); 
+ 484   7                          hb_show_year(str_time);
+ 485   7                          start_blink_year();
+ 486   7                          break;
+ 487   7                        case 2:
+ 488   7                          stop_blink_month();
+C51 COMPILER V9.54   DS1302                                                                05/27/2019 15:40:44 PAGE 9   
+
+ 489   7                          add_sub_month(str_time,1);
+ 490   7                          str_time = read_time(); 
+ 491   7                          str_time.date=1;//调月份的时候，把日设为1
+ 492   7                          set_time(str_time);
+ 493   7                          hb_show_month(str_time);
+ 494   7                          hb_show_date(str_time);
+ 495   7                          start_blink_month();
+ 496   7                          break;
+ 497   7                        case 3:
+ 498   7                          stop_blink_date();
+ 499   7                          add_sub_date(str_time,1);
+ 500   7                          str_time = read_time(); 
+ 501   7                          hb_show_date(str_time);
+ 502   7                          start_blink_date();
+ 503   7                          break;
+ 504   7                        case 4:
+ 505   7                          stop_blink_hour();
+ 506   7                          add_sub_hour(str_time,1);
+ 507   7                          str_time = read_time(); 
+ 508   7                          hb_show_hour(str_time);
+ 509   7                          start_blink_hour();
+ 510   7                          break;
+ 511   7                        case 5:
+ 512   7                          stop_blink_min();
+ 513   7                          add_sub_min(str_time,1);
+ 514   7                          str_time = read_time();
+ 515   7                          hb_show_min(str_time);
+ 516   7                          start_blink_min();
+ 517   7                          break;
+ 518   7                      }
+ 519   6                    }
+ 520   5                  }
+ 521   4                  if(SUB==0)
+ 522   4                  {
+ 523   5                    delay_ms(100);
+ 524   5                    if(SUB==0)
+ 525   5                    {
+ 526   6                      switch(cur_pos)
+ 527   6                      {
+ 528   7                        case 1:
+ 529   7                          stop_blink_year();
+ 530   7                          add_sub_year(str_time,0);
+ 531   7                          str_time = read_time(); 
+ 532   7                          hb_show_year(str_time);
+ 533   7                          start_blink_year();
+ 534   7                          break;
+ 535   7                        case 2:
+ 536   7                          stop_blink_month();
+ 537   7                          add_sub_month(str_time,0);
+ 538   7                          str_time = read_time(); 
+ 539   7                          str_time.date=1;//调月份的时候，把日设为1
+ 540   7                          set_time(str_time);
+ 541   7                          hb_show_month(str_time);
+ 542   7                          hb_show_date(str_time);
+ 543   7                          start_blink_month();
+ 544   7                          break;
+ 545   7                        case 3:
+ 546   7                          stop_blink_date();
+ 547   7                          add_sub_date(str_time,0);
+ 548   7                          str_time = read_time(); 
+ 549   7                          hb_show_date(str_time);
+ 550   7                          start_blink_date();
+C51 COMPILER V9.54   DS1302                                                                05/27/2019 15:40:44 PAGE 10  
+
+ 551   7                          break;
+ 552   7                        case 4:
+ 553   7                          stop_blink_hour();
+ 554   7                          add_sub_hour(str_time,0);
+ 555   7                          str_time = read_time(); 
+ 556   7                          hb_show_hour(str_time);
+ 557   7                          start_blink_hour();
+ 558   7                          break;
+ 559   7                        case 5:
+ 560   7                          stop_blink_min();
+ 561   7                          add_sub_min(str_time,0);
+ 562   7                          str_time = read_time(); 
+ 563   7                          hb_show_min(str_time);
+ 564   7                          start_blink_min();
+ 565   7                          break;
+ 566   7                      }
+ 567   6                    }
+ 568   5                  }
+ 569   4                  break;
+ 570   4                case 1:
+ 571   4                  if(ALARM==0)
+ 572   4                  {
+ 573   5                    delay_ms(90);
+ 574   5                    if(ALARM==0)
+ 575   5                    {
+ 576   6                      switch(cur_pos)
+ 577   6                      {
+ 578   7                        case 1:
+ 579   7                          stop_blink_hour();
+ 580   7                          break;
+ 581   7                        case 2:
+ 582   7                          stop_blink_min();
+ 583   7                          break;
+ 584   7                      }
+ 585   6                      cur_pos=0;
+ 586   6                      set_blink_flag=0;
+ 587   6                      //stop_blink_big_set();
+ 588   6                      //clean_big_set();
+ 589   6                      break;
+ 590   6                    }
+ 591   5                  }
+ 592   4                  if(SWITCH==0)
+ 593   4                  {
+ 594   5                    delay_ms(90);
+ 595   5                    if(SWITCH==0)
+ 596   5                    {
+ 597   6                      cur_pos+=1;
+ 598   6                      if(cur_pos==3)
+ 599   6                      {
+ 600   7                        cur_pos=0;
+ 601   7                        set_blink_flag=0;
+ 602   7                        stop_blink_big_min();
+ 603   7                        //stop_blink_big_set();
+ 604   7                        //clean_big_set();
+ 605   7                        break;
+ 606   7                      }
+ 607   6                      switch (cur_pos)
+ 608   6                      {
+ 609   7                        case 1:
+ 610   7                          //stop_blink_big_set();
+ 611   7                          start_blink_big_hour();
+ 612   7                          break;
+C51 COMPILER V9.54   DS1302                                                                05/27/2019 15:40:44 PAGE 11  
+
+ 613   7                        case 2:
+ 614   7                          stop_blink_big_hour();
+ 615   7                          start_blink_big_min();
+ 616   7                          break;
+ 617   7                      }
+ 618   6                    }
+ 619   5                  }
+ 620   4                  if(ADD==0)
+ 621   4                  {
+ 622   5                    delay_ms(90);
+ 623   5                    if(ADD==0)
+ 624   5                    {
+ 625   6                      switch (cur_pos)
+ 626   6                      {
+ 627   7                        case 1:
+ 628   7                          stop_blink_big_hour();
+ 629   7                          add_sub_hour(str_time,1);
+ 630   7                          str_time = read_time(); 
+ 631   7                          hb_show_big_hour(str_time);
+ 632   7                          //show_big_set();
+ 633   7                          start_blink_big_hour();
+ 634   7                          break;
+ 635   7                        case 2:
+ 636   7                          stop_blink_big_min();
+ 637   7                          add_sub_min(str_time,1);
+ 638   7                          str_time = read_time();
+ 639   7                          hb_show_big_min(str_time);
+ 640   7                          start_blink_big_min();
+ 641   7                          break;
+ 642   7                      }
+ 643   6                    }
+ 644   5                  }
+ 645   4                  if(SUB==0)
+ 646   4                  {
+ 647   5                    delay_ms(100);
+ 648   5                    if(SUB==0)
+ 649   5                    {
+ 650   6                      switch(cur_pos)
+ 651   6                      {
+ 652   7                        case 1:
+ 653   7                          stop_blink_big_hour();
+ 654   7                          add_sub_hour(str_time,0);
+ 655   7                          str_time = read_time(); 
+ 656   7                          hb_show_big_hour(str_time);
+ 657   7                          //show_big_set();
+ 658   7                          start_blink_big_hour();
+ 659   7                          break;
+ 660   7                        case 2:
+ 661   7                          stop_blink_big_min();
+ 662   7                          add_sub_min(str_time,0);
+ 663   7                          str_time = read_time(); 
+ 664   7                          hb_show_big_min(str_time);
+ 665   7                          start_blink_big_min();
+ 666   7                          break;
+ 667   7                      }
+ 668   6                    }
+ 669   5                  }
+ 670   4                  break;
+ 671   4                case 2:
+ 672   4                  if(ALARM==0)
+ 673   4                  {
+ 674   5                    delay_ms(40);
+C51 COMPILER V9.54   DS1302                                                                05/27/2019 15:40:44 PAGE 12  
+
+ 675   5                    if(ALARM==0)
+ 676   5                    {
+ 677   6                      switch(cur_pos)
+ 678   6                      {
+ 679   7                        case 1:
+ 680   7                          stop_blink_big_year();
+ 681   7                          break;
+ 682   7                        case 2:
+ 683   7                          stop_blink_big_month();
+ 684   7                          break;
+ 685   7                        case 3:
+ 686   7                          stop_blink_big_date();
+ 687   7                          break;
+ 688   7                      }
+ 689   6                      cur_pos=0;
+ 690   6                      set_blink_flag=0;
+ 691   6                      //stop_blink_big_set();
+ 692   6                      //clean_big_set();
+ 693   6                      break;
+ 694   6                    }
+ 695   5                  }
+ 696   4                  if(SWITCH==0)
+ 697   4                  {
+ 698   5                    delay_ms(90);
+ 699   5                    if(SWITCH==0)
+ 700   5                    {
+ 701   6                      cur_pos+=1;
+ 702   6                      //clean_lunar_year();
+ 703   6                      if(cur_pos==4)
+ 704   6                      {
+ 705   7                        cur_pos=0;
+ 706   7                        //set_blink_flag=0;
+ 707   7                        stop_blink_big_date();
+ 708   7                        //stop_blink_big_set();
+ 709   7                        //clean_big_set();
+ 710   7                        break;
+ 711   7                      }
+ 712   6                      switch (cur_pos)
+ 713   6                      {
+ 714   7                        case 1:
+ 715   7                          //stop_blink_big_set();
+ 716   7                          start_blink_big_year();
+ 717   7                          break;
+ 718   7                        case 2:
+ 719   7                          stop_blink_big_year();
+ 720   7                          start_blink_big_month();
+ 721   7                          break;
+ 722   7                        case 3:
+ 723   7                          stop_blink_big_month();
+ 724   7                          start_blink_big_date();
+ 725   7                          break;
+ 726   7                      }
+ 727   6                    }
+ 728   5                  }
+ 729   4                  if(ADD==0)
+ 730   4                  {
+ 731   5                    delay_ms(100);
+ 732   5                    if(ADD==0)
+ 733   5                    {
+ 734   6                      switch (cur_pos)
+ 735   6                      {
+ 736   7                        case 1:
+C51 COMPILER V9.54   DS1302                                                                05/27/2019 15:40:44 PAGE 13  
+
+ 737   7                          stop_blink_big_year();
+ 738   7                          add_sub_year(str_time,1);
+ 739   7                          str_time = read_time(); 
+ 740   7                          hb_show_big_year(str_time);
+ 741   7                          start_blink_big_year();
+ 742   7                          break;
+ 743   7                        case 2:
+ 744   7                          stop_blink_big_month();
+ 745   7                          add_sub_month(str_time,1);
+ 746   7                          str_time = read_time(); 
+ 747   7                          str_time.date=1;//调月份的时候，把日设为1
+ 748   7                          set_time(str_time);
+ 749   7                          hb_show_big_month(str_time);
+ 750   7                          hb_show_big_date(str_time);
+ 751   7                          start_blink_big_month();
+ 752   7                          break;
+ 753   7                        case 3:
+ 754   7                          stop_blink_big_date();
+ 755   7                          add_sub_date(str_time,1);
+ 756   7                          str_time = read_time(); 
+ 757   7                          hb_show_big_date(str_time);
+ 758   7                          start_blink_big_date();
+ 759   7                          break;
+ 760   7                      }
+ 761   6                    }
+ 762   5                  }
+ 763   4                  if(SUB==0)
+ 764   4                  {
+ 765   5                    delay_ms(100);
+ 766   5                    if(SUB==0)
+ 767   5                    {
+ 768   6                      switch(cur_pos)
+ 769   6                      {
+ 770   7                        case 1:
+ 771   7                          stop_blink_big_year();
+ 772   7                          add_sub_year(str_time,0);
+ 773   7                          str_time = read_time(); 
+ 774   7                          hb_show_big_year(str_time);
+ 775   7                          start_blink_big_year();
+ 776   7                          break;
+ 777   7                        case 2:
+ 778   7                          stop_blink_big_month();
+ 779   7                          add_sub_month(str_time,0);
+ 780   7                          str_time = read_time(); 
+ 781   7                          str_time.date=1;//调月份的时候，把日设为1
+ 782   7                          set_time(str_time);
+ 783   7                          hb_show_big_month(str_time);
+ 784   7                          hb_show_big_date(str_time);
+ 785   7                          start_blink_big_month();
+ 786   7                          break;
+ 787   7                        case 3:
+ 788   7                          stop_blink_big_date();
+ 789   7                          add_sub_date(str_time,0);
+ 790   7                          str_time = read_time(); 
+ 791   7                          hb_show_big_date(str_time);
+ 792   7                          start_blink_big_date();
+ 793   7                          break;
+ 794   7                      }
+ 795   6                    }
+ 796   5                  }
+ 797   4                  
+ 798   4                  
+C51 COMPILER V9.54   DS1302                                                                05/27/2019 15:40:44 PAGE 14  
+
+ 799   4                  
+ 800   4                  break;
+ 801   4              }
+ 802   3              if(cur_pos==0 && set_blink_flag==0)
+ 803   3              {
+ 804   4                if(screen_num==2)
+ 805   4                {
+ 806   5                  show_lunar(str_time.year,str_time.month,str_time.date);
+ 807   5                  delay_ms(100);
+ 808   5                  show_lunar_festival();    
+ 809   5                  delay_ms(100);
+ 810   5                  show_festival();  
+ 811   5                  delay_ms(100);
+ 812   5                  show_jieqi(str_time);
+ 813   5                }
+ 814   4                break;
+ 815   4              }
+ 816   3            }
+ 817   2            break;
+ 818   2        }
+ 819   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   3063    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----      62
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

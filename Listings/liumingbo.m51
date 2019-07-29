@@ -1,0 +1,177 @@
+BL51 BANKED LINKER/LOCATER V6.22                                                        05/22/2019  21:21:02  PAGE 1
+
+
+BL51 BANKED LINKER/LOCATER V6.22, INVOKED BY:
+C:\KEIL_V5\C51\BIN\BL51.EXE .\Objects\distance-measure.obj TO .\Objects\liumingbo PRINT (.\Listings\liumingbo.m51)
+
+
+MEMORY MODEL: SMALL WITH FLOATING POINT ARITHMETIC
+
+
+INPUT MODULES INCLUDED:
+  .\Objects\distance-measure.obj (DISTANCE_MEASURE)
+  C:\KEIL_V5\C51\LIB\C51FPS.LIB (?C?FPADD)
+  C:\KEIL_V5\C51\LIB\C51FPS.LIB (?C?FPMUL)
+  C:\KEIL_V5\C51\LIB\C51FPS.LIB (?C?FPDIV)
+  C:\KEIL_V5\C51\LIB\C51FPS.LIB (?C?FCAST)
+  C:\KEIL_V5\C51\LIB\C51FPS.LIB (?C?FPGETOPN)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?LNEG)
+
+
+LINK MAP OF MODULE:  .\Objects\liumingbo (DISTANCE_MEASURE)
+
+
+            TYPE    BASE      LENGTH    RELOCATION   SEGMENT NAME
+            -----------------------------------------------------
+
+            * * * * * * *   D A T A   M E M O R Y   * * * * * * *
+            REG     0000H     0008H     ABSOLUTE     "REG BANK 0"
+            DATA    0008H     0002H     UNIT         ?DT?DIST?DISTANCE_MEASURE
+
+            * * * * * * *   C O D E   M E M O R Y   * * * * * * *
+                    0000H     0003H                  *** GAP ***
+            CODE    0003H     0003H     ABSOLUTE     
+                    0006H     0005H                  *** GAP ***
+            CODE    000BH     0003H     ABSOLUTE     
+            CODE    000EH     0334H     UNIT         ?C?LIB_CODE
+            CODE    0342H     0067H     UNIT         ?PR?DIST?DISTANCE_MEASURE
+            CODE    03A9H     0014H     UNIT         ?PR?SQUARE?DISTANCE_MEASURE
+            CODE    03BDH     0009H     UNIT         ?PR?RECEIVE1_INT?DISTANCE_MEASURE
+            CODE    03C6H     0009H     UNIT         ?PR?TIMER4_INT?DISTANCE_MEASURE
+
+
+
+OVERLAY MAP OF MODULE:   .\Objects\liumingbo (DISTANCE_MEASURE)
+
+
+SEGMENT
+  +--> CALLED SEGMENT
+---------------------
+
+
+UNRESOLVED EXTERNAL SYMBOLS:
+   TEMP
+
+
+
+SYMBOL TABLE OF MODULE:  .\Objects\liumingbo (DISTANCE_MEASURE)
+
+  VALUE           TYPE          NAME
+  ----------------------------------
+
+BL51 BANKED LINKER/LOCATER V6.22                                                      05/22/2019  21:21:02  PAGE 2
+
+
+  -------         MODULE        DISTANCE_MEASURE
+  C:0000H         SYMBOL        _ICE_DUMMY_
+  D:0090H         PUBLIC        P1
+  D:00B0H         PUBLIC        P3
+  C:03C6H         PUBLIC        timer4_int
+  B:00A8H.7       PUBLIC        EA
+  D:00A8H         PUBLIC        IE
+  C:03A9H         PUBLIC        square
+  B:0090H.3       PUBLIC        Trig
+  D:00B8H         PUBLIC        IP
+  D:0098H         PUBLIC        SCON
+  D:0088H         PUBLIC        TCON
+  C:0342H         PUBLIC        dist
+  C:03BDH         PUBLIC        receive1_int
+  D:008CH         PUBLIC        TH0
+  B:00A8H.0       PUBLIC        EX0
+  B:0088H.0       PUBLIC        IT0
+  B:00A8H.2       PUBLIC        EX1
+  D:008AH         PUBLIC        TL0
+  B:0088H.4       PUBLIC        TR0
+  D:00C8H         PUBLIC        T2CON
+  D:00D0H         PUBLIC        PSW
+  -------         PROC          SQUARE
+  -------         DO            
+  D:0006H         SYMBOL        i
+  -------         ENDDO         
+  C:03A9H         LINE#         9
+  C:03A9H         LINE#         10
+  C:03A9H         LINE#         12
+  C:03B6H         LINE#         13
+  C:03B6H         LINE#         14
+  C:03B8H         LINE#         15
+  C:03B9H         LINE#         16
+  C:03BBH         LINE#         17
+  C:03BCH         LINE#         18
+  C:03BCH         LINE#         19
+  -------         ENDPROC       SQUARE
+  -------         PROC          DIST
+  -------         DO            
+  D:0008H         SYMBOL        echo_time
+  D:0006H         SYMBOL        timeH
+  D:0004H         SYMBOL        timeL
+  D:0004H         SYMBOL        dist
+  -------         ENDDO         
+  C:0342H         LINE#         20
+  C:0342H         LINE#         21
+  C:0342H         LINE#         26
+  C:0347H         LINE#         27
+  C:0349H         LINE#         30
+  C:034BH         LINE#         31
+  C:034EH         LINE#         32
+  C:0350H         LINE#         33
+  C:0352H         LINE#         34
+  C:0354H         LINE#         35
+  C:0358H         LINE#         36
+  C:0362H         LINE#         37
+  -------         ENDPROC       DIST
+BL51 BANKED LINKER/LOCATER V6.22                                                      05/22/2019  21:21:02  PAGE 3
+
+
+  -------         PROC          RECEIVE1_INT
+  C:03BDH         LINE#         41
+  C:03BDH         LINE#         43
+  C:03BFH         LINE#         45
+  C:03C1H         LINE#         46
+  C:03C5H         LINE#         47
+  -------         ENDPROC       RECEIVE1_INT
+  -------         PROC          TIMER4_INT
+  C:03C6H         LINE#         48
+  C:03C6H         LINE#         50
+  C:03C8H         LINE#         51
+  C:03CBH         LINE#         52
+  C:03CEH         LINE#         53
+  -------         ENDPROC       TIMER4_INT
+  -------         ENDMOD        DISTANCE_MEASURE
+
+  -------         MODULE        ?C?FPADD
+  C:0015H         PUBLIC        ?C?FPADD
+  C:0011H         PUBLIC        ?C?FPSUB
+  -------         ENDMOD        ?C?FPADD
+
+  -------         MODULE        ?C?FPMUL
+  C:0106H         PUBLIC        ?C?FPMUL
+  -------         ENDMOD        ?C?FPMUL
+
+  -------         MODULE        ?C?FPDIV
+  C:020FH         PUBLIC        ?C?FPDIV
+  -------         ENDMOD        ?C?FPDIV
+
+  -------         MODULE        ?C?FCAST
+  C:02B6H         PUBLIC        ?C?FCASTC
+  C:02B1H         PUBLIC        ?C?FCASTI
+  C:02ACH         PUBLIC        ?C?FCASTL
+  -------         ENDMOD        ?C?FCAST
+
+  -------         MODULE        ?C?LNEG
+  C:0334H         PUBLIC        ?C?LNEG
+  -------         ENDMOD        ?C?LNEG
+
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?DIST?DISTANCE_MEASURE
+
+*** WARNING L1: UNRESOLVED EXTERNAL SYMBOL
+    SYMBOL:  TEMP
+    MODULE:  .\Objects\distance-measure.obj (DISTANCE_MEASURE)
+
+*** WARNING L2: REFERENCE MADE TO UNRESOLVED EXTERNAL
+    SYMBOL:  TEMP
+    MODULE:  .\Objects\distance-measure.obj (DISTANCE_MEASURE)
+    ADDRESS: 0363H
+
+Program Size: data=10.0 xdata=0 code=967
+LINK/LOCATE RUN COMPLETE.  3 WARNING(S),  0 ERROR(S)
