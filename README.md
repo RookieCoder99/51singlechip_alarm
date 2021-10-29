@@ -1,2 +1,2 @@
-# 51singlechip_alarm
-It is a smart alarm clock designed with SST89E516RD singlechip
+# 基于51单片机的智能闹钟
+
